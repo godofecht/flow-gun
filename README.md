@@ -41,7 +41,7 @@ On Linux, Flow's windowed gfx backend uses SDL2. On macOS, it uses the native Co
 
 The **2D map and navigable 3D garden are views of the exact same Flow simulation**, sharing plant identity, developmental age, soil, nutrients, rainfall, and random history. **Tab** switches between the views without resetting or copying the ecosystem. Flow's software 3D renderer projects an elevated heightfield, species-specific shoots and billboards using a depth buffer; the 3D camera appears as a marker on the 2D map and the 3D view contains a live minimap.
 
-In 2D, click a plot to plant and position the 3D camera above that plot. In 3D, use **WASD** to walk, **arrow keys** to look, and **V** to switch between canopy-height and human-height cameras. Climate shortcuts while walking become **Z = rain, X = temperate, C = drought** so they don't conflict with movement. Switch back with **Tab**. The website also provides a 2D/3D button.
+In 2D, click a plot to plant and position the 3D camera above it. In 3D, **orbit** mode lets you inspect the landscape from a rotatable vantage point, while **V** switches to a ground-level **walk** mode. **WASD** pans or walks, **drag** and **arrow keys** look, **scroll** zooms in orbit (or adjusts field of view in walk), **Q/E** provide keyboard orbit zoom, **F** moves faster, and **Space** returns to the garden centre and resets the camera orientation. Walkers slide along pond banks rather than passing through the water. Climate shortcuts in 3D are **Z = rain, X = temperate, C = drought** so they don't conflict with movement. Switch back to the map with **Tab**. The website has buttons that trigger the original Flow WebAssembly input handling.
 
 There is no decorative camera animation or separate 3D biology: only user-controlled navigation and evolving plants.
 
@@ -65,9 +65,13 @@ This is **morphogenesis through local environmental feedback**, not a pasted col
 | Input | Action |
 |---|---|
 | `Tab` | Toggle 2D map and 3D navigable garden |
-| `WASD` (3D) | Walk |
-| `Arrows` (3D) | Look around |
-| `V` (3D) | Change camera height |
+| `WASD` (3D) | Pan the orbit focus / walk at ground level |
+| Mouse drag / arrow keys (3D) | Look around |
+| `V` (3D) | Switch orbit / walk camera |
+| Mouse wheel (3D) | Dolly camera in orbit / adjust field of view in walk |
+| `Q` / `E` (3D orbit) | Zoom closer / further |
+| `F` (3D) | Fast move |
+| `Space` (3D) | Return to centre and reset camera |
 | `Z`/`X`/`C` (3D) | Rain / temperate / drought |
 | `1`, `2`, `3`, `4` | Brush: clover, wildflower, fern, shrub |
 | Left mouse button | Plant chosen species |
@@ -87,7 +91,7 @@ Flow's headless recorder runs the exact same Flow program and visualiser:
 flow record src/garden.flow --frames 240 --skip 3 --out /tmp/flow-garden --gif /tmp/flow-garden.gif
 ```
 
-The repository's GitHub Actions workflow compiles and records a short run, then uploads the captured frames as an artifact.
+The repository's GitHub Actions workflow compiles and records a short run, then uploads the captured frames as an artifact. The 3D regression test **pauses the ecosystem first**, scripting keyboard movement and mouse drag/scroll so that distinct frames must arise from camera navigation, not plant growth.
 
 ## Model / rules
 
