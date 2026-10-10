@@ -2,13 +2,13 @@
 
 **A tiny living world grown by [Flow](https://github.com/flooooooooooow/flow).**
 
-A colourful, interactive, top-down garden in which **soil, moisture, light, resources and neighbouring plants** determine what grows. You can plant four species, change the weather, clear a patch, and watch the ecosystem reorganise. The living garden is simulated and rendered **entirely in Flow** with the native gfx library.
+A colourful, interactive 2D and 3D garden in which **soil, moisture, light, resources and neighbouring plants** determine what grows. You can plant four species, change the weather, clear a patch, and watch the ecosystem reorganise. The living garden is simulated and rendered **entirely in Flow** with the native gfx library.
 
 ## Play on GitHub Pages
 
 The browser site is generated from **the same `src/garden.flow`** source using Emscripten and the Flow WASM backend. The [Pages workflow](.github/workflows/pages.yml) automatically builds the site and publishes the generated WebAssembly bundle once GitHub Pages is enabled.
 
-**One-time repository owner setting:** Open **Settings → Pages → Build and deployment → Source: GitHub Actions**, then rerun **Actions → Publish Flow Garden website → Run workflow**. GitHub Pages doesn't permit the default `GITHUB_TOKEN` to enable a new Pages site. Until that setting is selected, the workflow still checks the entire WASM build and uploads a downloadable `flow-garden-site` artifact.
+GitHub Pages is deployed by the [publish workflow](.github/workflows/pages.yml), which compiles the original Flow program to WebAssembly before deployment. The repository's Pages source must remain set to **GitHub Actions** (rather than branch-based Jekyll) for the interactive site to stay live.
 
 After deployment, the public URL is: https://godofecht.github.io/flow-gun/
 
@@ -25,6 +25,14 @@ flow gfx src/garden.flow
 If you are using a source checkout of Flow rather than an installed `flow`, run `/path/to/flow/flow gfx /path/to/flow-gun/src/garden.flow`.
 
 On Linux, Flow's windowed gfx backend uses SDL2. On macOS, it uses the native Cocoa backend.
+
+## Two views, one living world
+
+The **2D map and navigable 3D garden are views of the exact same Flow simulation**, sharing plant identity, developmental age, soil, nutrients, rainfall, and random history. **Tab** switches between the views without resetting or copying the ecosystem. Flow's software 3D renderer projects an elevated heightfield, species-specific shoots and billboards using a depth buffer; the 3D camera appears as a marker on the 2D map and the 3D view contains a live minimap.
+
+In 2D, click a plot to plant and position the 3D camera above that plot. In 3D, use **WASD** to walk, **arrow keys** to look, and **V** to switch between canopy-height and human-height cameras. Climate shortcuts while walking become **Z = rain, X = temperate, C = drought** so they don't conflict with movement. Switch back with **Tab**. The website also provides a 2D/3D button.
+
+There is no decorative camera animation or separate 3D biology: only user-controlled navigation and evolving plants.
 
 ## The garden
 
@@ -45,6 +53,11 @@ This is **morphogenesis through local environmental feedback**, not a pasted col
 
 | Input | Action |
 |---|---|
+| `Tab` | Toggle 2D map and 3D navigable garden |
+| `WASD` (3D) | Walk |
+| `Arrows` (3D) | Look around |
+| `V` (3D) | Change camera height |
+| `Z`/`X`/`C` (3D) | Rain / temperate / drought |
 | `1`, `2`, `3`, `4` | Brush: clover, wildflower, fern, shrub |
 | Left mouse button | Plant chosen species |
 | Right mouse button | Remove plants |
