@@ -4,6 +4,14 @@
 
 A colourful, interactive, top-down garden in which **soil, moisture, light, resources and neighbouring plants** determine what grows. You can plant four species, change the weather, clear a patch, and watch the ecosystem reorganise. The living garden is simulated and rendered **entirely in Flow** with the native gfx library.
 
+## Play on GitHub Pages
+
+The browser site is generated from **the same `src/garden.flow`** source using Emscripten and the Flow WASM backend. The [Pages workflow](.github/workflows/pages.yml) automatically builds the site and publishes the generated WebAssembly bundle once GitHub Pages is enabled.
+
+**One-time repository owner setting:** Open **Settings → Pages → Build and deployment → Source: GitHub Actions**, then rerun **Actions → Publish Flow Garden website → Run workflow**. GitHub Pages doesn't permit the default `GITHUB_TOKEN` to enable a new Pages site. Until that setting is selected, the workflow still checks the entire WASM build and uploads a downloadable `flow-garden-site` artifact.
+
+After deployment, the public URL is: https://godofecht.github.io/flow-gun/
+
 ## Run
 
 Install [Flow](https://github.com/flooooooooooow/flow) from its current main branch (or, on macOS/Linux, use `brew tap flooooooooooow/flow && brew install flow`).
