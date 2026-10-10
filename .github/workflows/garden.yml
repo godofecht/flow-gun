@@ -48,6 +48,20 @@ jobs:
           assert viewport_digest(images[18]) != viewport_digest(images[29]), "walk camera did not move"
           print(f"PASS: paused Flow ecology / {len(unique)} distinct 3D camera views")
           PY
+      - name: Verify a paused garden has stable frames while camera is idle
+        env:
+          FLOW_GFX_RECORD_KEYS: '1:35,2:48'
+        run: |
+          ./flow-sdk/flow record src/garden.flow --frames 14 --out /tmp/flow-garden-idle
+          python3 - <<'PY'
+          from pathlib import Path
+          from hashlib import sha256
+          frames = sorted(Path("/tmp/flow-garden-idle").glob("*.ppm"))
+          assert len(frames) == 14
+          fingerprints = {sha256(p.read_bytes()).digest() for p in frames[4:]}
+          assert len(fingerprints) == 1, "paused world / resting camera unexpectedly changed"
+          print("PASS: static world with resting camera is pixel-identical")
+          PY
       - name: Upload recorded frames
         if: success()
         uses: actions/upload-artifact@v4
@@ -56,4 +70,5 @@ jobs:
           path: |
             /tmp/flow-garden-frames/
             /tmp/flow-garden-3d/
+            /tmp/flow-garden-idle/
           if-no-files-found: error
