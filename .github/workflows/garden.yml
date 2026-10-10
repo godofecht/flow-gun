@@ -21,12 +21,21 @@ jobs:
       - name: Compile, run and verify deterministic headless garden
         run: |
           ./flow-sdk/flow record src/garden.flow --frames 35 --out /tmp/flow-garden-frames
-      - name: Render true 3D in headless recorder
+      - name: Exercise orbit, mouse drag, zoom and walking camera
         env:
-          FLOW_GFX_RECORD_KEYS: '1:48,3-7:13,8-10:124,11:9'
+          FLOW_GFX_RECORD_KEYS: '1:48,3-8:13,10-11:124,14:9,16-20:13,23:49,26:9'
+          FLOW_GFX_RECORD_MOUSE: '3,10,140,180,350,240,1,0;11,11,350,240,350,240,0,2;16,23,245,230,340,265,1,0;24,25,340,265,340,265,0,-1'
         run: |
-          ./flow-sdk/flow record src/garden.flow --frames 16 --out /tmp/flow-garden-3d
-          test -n "$(find /tmp/flow-garden-3d -type f -name '*.ppm' -print -quit)"
+          ./flow-sdk/flow record src/garden.flow --frames 36 --out /tmp/flow-garden-3d
+          python3 - <<'PY'
+          from pathlib import Path
+          from hashlib import sha256
+          images = sorted(Path("/tmp/flow-garden-3d").rglob("*.ppm"))
+          assert len(images) == 36, f"expected 36 rendered frames, got {len(images)}"
+          unique = {sha256(img.read_bytes()).digest() for img in images}
+          assert len(unique) >= 8, f"camera sweep rendered only {len(unique)} distinct frames"
+          print(f"PASS: orbit/zoom/walk camera integration rendered {len(unique)} distinct frames")
+          PY
       - name: Upload recorded frames
         if: success()
         uses: actions/upload-artifact@v4
