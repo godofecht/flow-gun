@@ -523,6 +523,25 @@ function soil_height(cx: i32, cy: i32, terrain: i32) -> f32 {
     return 0.15 + 0.50 * gentle + 0.11 * fine
 }
 
+# Continuous camera height: bilinear samples avoid abrupt one-cell steps.
+# Heights are computed once from the same 64x64 terrain grid.
+function terrain_height_at(heights: ptr<f32>, wx: f32, wz: f32) -> f32 {
+    let gx: f32 = r3d_clampf(wx + 31.5, 0.0, 62.999)
+    let gz: f32 = r3d_clampf(wz + 31.5, 0.0, 62.999)
+    let cx: i32 = gx as i32
+    let cz: i32 = gz as i32
+    let u: f32 = gx - (cx as f32)
+    let v: f32 = gz - (cz as f32)
+    let a: f32 = heights[cz * MAP + cx]
+    let b: f32 = heights[cz * MAP + cx + 1]
+    let d: f32 = heights[(cz + 1) * MAP + cx]
+    let e: f32 = heights[(cz + 1) * MAP + cx + 1]
+    return a * (1.0 - u) * (1.0 - v)
+         + b * u * (1.0 - v)
+         + d * (1.0 - u) * v
+         + e * u * v
+}
+
 function terrain_colour3d(terrain: i32, damp: f32, cx: i32, cy: i32) -> V3 {
     if terrain == 1 { return v3(0.13, 0.38, 0.47) }
     let grain: f32 = ((hash_xy(cx, cy) % 997) as f32) / 997.0
@@ -909,7 +928,7 @@ function main() -> i32 {
 
             let sx: i32 = r3d_clampf(cam_x + 32.0, 0.0, 63.0) as i32
             let sz: i32 = r3d_clampf(cam_z + 32.0, 0.0, 63.0) as i32
-            let floor_y: f32 = heights[sz * MAP + sx]
+            let floor_y: f32 = terrain_height_at(heights, cam_x, cam_z)
             let target_y: f32 = floor_y + 1.85
             cam_y = cam_y + (target_y - cam_y) * r3d_clampf(7.0 * dt, 0.0, 1.0)
         }
@@ -960,7 +979,7 @@ function main() -> i32 {
             if orbit {
                 let sx: i32 = r3d_clampf(cam_x + 32.0, 0.0, 63.0) as i32
                 let sz: i32 = r3d_clampf(cam_z + 32.0, 0.0, 63.0) as i32
-                let focus_y: f32 = heights[sz * MAP + sx]
+                let focus_y: f32 = terrain_height_at(heights, cam_x, cam_z)
                 let target: V3 = v3(cam_x, focus_y, cam_z)
                 eye = v3_sub(target, v3_scale(fwd3, zoom))
                 m4_look_at(p_view, eye, target, v3(0.0, 1.0, 0.0))
