@@ -18,10 +18,7 @@ jobs:
           repository: flooooooooooow/flow
           path: flow-sdk
           persist-credentials: false
-      - name: Compile garden with Flow
-        run: |
-          ./flow-sdk/flow compile src/garden.flow
-      - name: Record deterministic headless garden
+      - name: Compile, run and verify deterministic headless garden
         run: |
           ./flow-sdk/flow record src/garden.flow --frames 35 --out /tmp/flow-garden-frames
       - name: Upload recorded frames
