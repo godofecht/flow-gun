@@ -469,10 +469,10 @@ function draw_hud(g: Gfx, plant: ptr<i32>, age: ptr<i32>,
     let k4: i32 = gfx_draw_text(g, 552, 569, "R  NEW GARDEN", 1, 143, 169, 149)
     let k5: i32 = gfx_draw_text(g, 552, 586, "P  PAUSE", 1, 143, 169, 149)
     } else {
-        let j3: i32 = gfx_draw_text(g, 552, 386, "3D WALK", 1, 150, 192, 159)
+        let j3: i32 = gfx_draw_text(g, 552, 386, "3D CAMERA", 1, 150, 192, 159)
         let j4: i32 = gfx_draw_text(g, 552, 404, "WASD MOVE", 1, 186, 212, 187)
-        let j5: i32 = gfx_draw_text(g, 552, 418, "ARROWS LOOK", 1, 186, 212, 187)
-        let j6: i32 = gfx_draw_text(g, 552, 432, "V CAMERA", 1, 186, 212, 187)
+        let j5: i32 = gfx_draw_text(g, 552, 418, "DRAG LOOK", 1, 186, 212, 187)
+        let j6: i32 = gfx_draw_text(g, 552, 432, "V ORBIT/WALK", 1, 186, 212, 187)
         let j7: i32 = gfx_draw_text(g, 552, 524, "Z RAIN", 1, 186, 212, 187)
         let j8: i32 = gfx_draw_text(g, 552, 542, "X TEMPERATE", 1, 186, 212, 187)
         let j9: i32 = gfx_draw_text(g, 552, 560, "C DROUGHT", 1, 186, 212, 187)
@@ -723,18 +723,29 @@ function main() -> i32 {
     let p_view: ptr<f32> = view
     let p_vp: ptr<f32> = viewproj
     let mini: array<u8, 12288> = [0, 0, 0, 0]
+    # Two navigable cameras observe one ecological state. The 2D pointer,
+    # orbit focal point and walk position share these map coordinates.
     let mut show3d: bool = false
-    let mut high_camera: bool = true
+    let mut orbit: bool = true
     let mut tab_held: bool = false
     let mut v_held: bool = false
+    let mut space_held: bool = false
     let mut cam_x: f32 = 0.0
-    let mut cam_z: f32 = 25.0
-    let mut cam_y: f32 = 13.0
+    let mut cam_z: f32 = 13.0
+    let mut cam_y: f32 = 2.0
     let mut yaw: f32 = 0.0
-    let mut pitch: f32 = -0.47
+    let mut pitch: f32 = -0.57
+    let mut zoom: f32 = 27.0
+    let mut zoom_goal: f32 = 27.0
+    let mut fov: f32 = 65.0
+    let mut vx: f32 = 0.0
+    let mut vz: f32 = 0.0
+    let mut last_x: i32 = 0
+    let mut last_y: i32 = 0
+    let mut was_dragging: bool = false
+    let mut previous_wheel: i32 = 0
+    let mut previous_ms: f64 = gfx_time_ms(g)
     m4_identity(p_model)
-    m4_perspective(p_proj, r3d_radians(67.0),
-                   (SCENE_W as f32) / (SCENE_H as f32), 0.09, 120.0)
     let mut frame: i32 = 0
 
     while frame < MAX_FRAMES {
@@ -743,12 +754,40 @@ function main() -> i32 {
         if gfx_key_down(g, KEY_2) { brush = 2 }
         if gfx_key_down(g, KEY_3) { brush = 3 }
         if gfx_key_down(g, KEY_4) { brush = 4 }
+        # Monotonic clock with bounded timestep, even after a suspended tab.
+        let now: f64 = gfx_time_ms(g)
+        let dt: f32 = r3d_clampf(((now - previous_ms) * 0.001) as f32,
+                                  0.008, 0.050)
+        previous_ms = now
+        let mouse: Mouse = gfx_mouse(g)
         let tab_now: bool = gfx_key_down(g, KEY_TAB)
-        if tab_now and !tab_held { show3d = !show3d }
+        if tab_now and !tab_held {
+            show3d = !show3d
+            vx = 0.0
+            vz = 0.0
+            was_dragging = false
+        }
         tab_held = tab_now
+
         let v_now: bool = gfx_key_down(g, KEY_V)
-        if v_now and !v_held and show3d { high_camera = !high_camera }
+        if v_now and !v_held and show3d {
+            orbit = !orbit
+            vx = 0.0
+            vz = 0.0
+            pitch = if orbit { -0.57 } else { -0.13 }
+            was_dragging = false
+        }
         v_held = v_now
+        let space_now: bool = gfx_key_down(g, KEY_SPACE)
+        if space_now and !space_held and show3d {
+            yaw = 0.0
+            pitch = if orbit { -0.57 } else { -0.13 }
+            zoom_goal = 27.0
+            vx = 0.0
+            vz = 0.0
+        }
+        space_held = space_now
+
         if !show3d {
             if gfx_key_down(g, KEY_W) { weather = 1 }
             if gfx_key_down(g, KEY_S) { weather = 0 }
@@ -757,30 +796,77 @@ function main() -> i32 {
             if gfx_key_down(g, KEY_Z) { weather = 1 }
             if gfx_key_down(g, KEY_X) { weather = 0 }
             if gfx_key_down(g, KEY_C) { weather = 2 }
+
+            # Drag to look. On browsers mouse coordinates are already scaled
+            # to canvas pixels by the Flow gfx WASM backend.
+            let dragging: bool = mouse.inside != 0 and
+                mouse.x >= FIELD_X and mouse.x < FIELD_X + SCENE_W and
+                mouse.y >= FIELD_Y and mouse.y < FIELD_Y + SCENE_H and
+                (mouse.left != 0 or mouse.right != 0)
+            if dragging and was_dragging {
+                let dx: f32 = r3d_clampf((mouse.x - last_x) as f32, -60.0, 60.0)
+                let dy: f32 = r3d_clampf((mouse.y - last_y) as f32, -60.0, 60.0)
+                yaw = yaw - dx * 0.0045
+                pitch = pitch - dy * 0.0040
+            }
+            was_dragging = dragging
+            last_x = mouse.x
+            last_y = mouse.y
+            if gfx_key_down(g, KEY_LEFT) { yaw = yaw + 1.6 * dt }
+            if gfx_key_down(g, KEY_RIGHT) { yaw = yaw - 1.6 * dt }
+            if gfx_key_down(g, KEY_UP) { pitch = pitch + 1.35 * dt }
+            if gfx_key_down(g, KEY_DOWN) { pitch = pitch - 1.35 * dt }
+            pitch = if orbit { r3d_clampf(pitch, -1.40, -0.14) }
+                             else { r3d_clampf(pitch, -1.30, 1.15) }
+
+            # The wheel is cumulative, not an impulse. Orbit dollies;
+            # first-person uses the same control to adjust field of view.
+            let wheel_delta: i32 = mouse.wheel - previous_wheel
+            previous_wheel = mouse.wheel
+            if wheel_delta != 0 {
+                if orbit {
+                    zoom_goal = r3d_clampf(zoom_goal + (wheel_delta as f32) * 2.6,
+                                           5.0, 78.0)
+                } else {
+                    fov = r3d_clampf(fov + (wheel_delta as f32) * 1.7, 47.0, 85.0)
+                }
+            }
+            if orbit {
+                if gfx_key_down(g, KEY_Q) {
+                    zoom_goal = r3d_clampf(zoom_goal - 18.0 * dt, 5.0, 78.0)
+                }
+                if gfx_key_down(g, KEY_E) {
+                    zoom_goal = r3d_clampf(zoom_goal + 18.0 * dt, 5.0, 78.0)
+                }
+            }
+            zoom = zoom + (zoom_goal - zoom) * r3d_clampf(9.0 * dt, 0.0, 1.0)
+
             let fwd: V3 = r3d_forward(yaw, 0.0)
             let right: V3 = r3d_right(yaw)
-            let mut mx: f32 = 0.0
-            let mut mz: f32 = 0.0
-            if gfx_key_down(g, KEY_W) { mx = mx + fwd.x; mz = mz + fwd.z }
-            if gfx_key_down(g, KEY_S) { mx = mx - fwd.x; mz = mz - fwd.z }
-            if gfx_key_down(g, KEY_A) { mx = mx - right.x; mz = mz - right.z }
-            if gfx_key_down(g, KEY_D) { mx = mx + right.x; mz = mz + right.z }
-            if gfx_key_down(g, KEY_LEFT) { yaw = yaw + 0.035 }
-            if gfx_key_down(g, KEY_RIGHT) { yaw = yaw - 0.035 }
-            if gfx_key_down(g, KEY_UP) { pitch = pitch + 0.025 }
-            if gfx_key_down(g, KEY_DOWN) { pitch = pitch - 0.025 }
-            pitch = r3d_clampf(pitch, -1.35, 0.45)
-            let length: f32 = sqrtf(mx * mx + mz * mz)
-            if length > 0.001 {
-                let speed: f32 = if high_camera { 0.34 } else { 0.16 }
-                cam_x = r3d_clampf(cam_x + speed * mx / length, -31.0, 31.0)
-                cam_z = r3d_clampf(cam_z + speed * mz / length, -31.0, 31.0)
+            let mut move_x: f32 = 0.0
+            let mut move_z: f32 = 0.0
+            if gfx_key_down(g, KEY_W) { move_x = move_x + fwd.x; move_z = move_z + fwd.z }
+            if gfx_key_down(g, KEY_S) { move_x = move_x - fwd.x; move_z = move_z - fwd.z }
+            if gfx_key_down(g, KEY_A) { move_x = move_x - right.x; move_z = move_z - right.z }
+            if gfx_key_down(g, KEY_D) { move_x = move_x + right.x; move_z = move_z + right.z }
+            let norm: f32 = sqrtf(move_x * move_x + move_z * move_z)
+            if norm > 0.001 {
+                move_x = move_x / norm
+                move_z = move_z / norm
             }
-            let ci: i32 = ((cam_z + 32.0) as i32) * MAP + ((cam_x + 32.0) as i32)
-            let base: f32 = soil_height((cam_x + 32.0) as i32,
-                                       (cam_z + 32.0) as i32, ground[ci])
-            let desired: f32 = base + (if high_camera { 12.0 } else { 1.85 })
-            cam_y = cam_y + (desired - cam_y) * 0.1
+            let walk_speed: f32 = if orbit { 12.0 } else { 6.5 }
+            let boost: f32 = if gfx_key_down(g, KEY_F) { 2.0 } else { 1.0 }
+            let easing: f32 = r3d_clampf(11.0 * dt, 0.0, 1.0)
+            vx = vx + (move_x * walk_speed * boost - vx) * easing
+            vz = vz + (move_z * walk_speed * boost - vz) * easing
+            cam_x = r3d_clampf(cam_x + vx * dt, -30.5, 30.5)
+            cam_z = r3d_clampf(cam_z + vz * dt, -30.5, 30.5)
+
+            let sx: i32 = r3d_clampf(cam_x + 32.0, 0.0, 63.0) as i32
+            let sz: i32 = r3d_clampf(cam_z + 32.0, 0.0, 63.0) as i32
+            let floor_y: f32 = soil_height(sx, sz, ground[sz * MAP + sx])
+            let target_y: f32 = floor_y + 1.85
+            cam_y = cam_y + (target_y - cam_y) * r3d_clampf(7.0 * dt, 0.0, 1.0)
         }
         if gfx_key_down(g, KEY_P) {
             if !key_p_held { paused = !paused }
@@ -799,7 +885,6 @@ function main() -> i32 {
             key_r_held = false
         }
 
-        let mouse: Mouse = gfx_mouse(g)
         let mx: i32 = (mouse.x - FIELD_X) / TILE
         let my: i32 = (mouse.y - FIELD_Y) / TILE
         if !show3d and mouse.inside != 0 and mouse.x >= FIELD_X and mouse.y >= FIELD_Y
@@ -825,15 +910,31 @@ function main() -> i32 {
 
         gfx_clear(g, 13, 23, 21)
         if show3d {
-            let eye: V3 = v3(cam_x, cam_y, cam_z)
-            m4_look_at(p_view, eye, v3_add(eye, r3d_forward(yaw, pitch)),
-                       v3(0.0, 1.0, 0.0))
+            let fwd3: V3 = r3d_forward(yaw, pitch)
+            let mut eye: V3 = v3(cam_x, cam_y, cam_z)
+            if orbit {
+                let sx: i32 = r3d_clampf(cam_x + 32.0, 0.0, 63.0) as i32
+                let sz: i32 = r3d_clampf(cam_z + 32.0, 0.0, 63.0) as i32
+                let focus_y: f32 = soil_height(sx, sz, ground[sz * MAP + sx])
+                let target: V3 = v3(cam_x, focus_y, cam_z)
+                eye = v3_sub(target, v3_scale(fwd3, zoom))
+                m4_look_at(p_view, eye, target, v3(0.0, 1.0, 0.0))
+            } else {
+                m4_look_at(p_view, eye, v3_add(eye, fwd3),
+                           v3(0.0, 1.0, 0.0))
+            }
+            m4_perspective(p_proj, r3d_radians(fov),
+                           (SCENE_W as f32) / (SCENE_H as f32), 0.12, 160.0)
             m4_mul(p_vp, projection, view)
             r3d_clear_gradient(v3(0.28, 0.45, 0.58), v3(0.75, 0.78, 0.63))
             r3d_draw_mesh(model, viewproj, v3(0.38, 0.78, 0.42), R3D_GOURAUD)
-            paint_living_3d(viewproj, plant, age, wet, ground, cam_x, cam_z)
+            paint_living_3d(viewproj, plant, age, wet, ground,
+                            eye.x, eye.z, fwd3.x, fwd3.z, orbit)
             gfx_blit_rgb(g, FIELD_X, FIELD_Y, SCENE_W, SCENE_H, r3d_pixels())
-            let mode_text: i32 = gfx_draw_text(g, 30, 577, "3D SURFACE / SAME LIVING CELLS", 1, 222, 223, 185)
+            let mode_text: i32 = gfx_draw_text(g, 30, 577,
+                if orbit { "ORBIT / DRAG LOOK / SCROLL ZOOM / WASD PAN" }
+                else { "WALK / DRAG LOOK / WASD MOVE / F FAST" },
+                1, 222, 223, 185)
         } else {
             draw_garden(g, pixels, ground, wet, plant, age)
             gfx_fill_rect(g, FIELD_X + ((cam_x + 32.0) as i32) * TILE,
@@ -841,7 +942,12 @@ function main() -> i32 {
                           240, 230, 160)
         }
         draw_hud(g, plant, age, weather, brush, paused, show3d)
-        if show3d { draw_minimap(g, mini, ground, plant, cam_x, cam_z) }
+        if show3d {
+            draw_minimap(g, mini, ground, plant, cam_x, cam_z)
+            let mode_label: i32 = gfx_draw_text(g, 553, 368,
+                if orbit { "ORBIT  V:WALK" } else { "WALK  V:ORBIT" },
+                1, 202, 224, 173)
+        }
         gfx_present(g)
         gfx_wait_frame(g, 60)
         frame = frame + 1
