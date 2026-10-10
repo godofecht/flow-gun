@@ -12,6 +12,17 @@ GitHub Pages is deployed by the [publish workflow](.github/workflows/pages.yml),
 
 After deployment, the public URL is: https://godofecht.github.io/flow-gun/
 
+## Optimised 3D navigation
+
+The 3D mode now features smooth frame-time-based movement, a birds-eye **orbit**
+camera and a ground-level **walk** camera. Both are views of the same 2D
+ecological lattice. **Tab** toggles 2D/3D, **V** switches orbit/walk,
+**WASD** pans/moves, **drag** rotates the view, **arrow keys** look,
+**scroll** zooms in orbit or changes FOV in walk, **Q/E** zoom in/out in
+orbit, **F** accelerates movement, and **Space** resets orientation. The
+3D ground uses 2,048 triangles instead of 8,192, with distance-based
+vegetation detail reduction. The 64×64 ecology remains full-resolution.
+
 ## Run
 
 Install [Flow](https://github.com/flooooooooooow/flow) from its current main branch (or, on macOS/Linux, use `brew tap flooooooooooow/flow && brew install flow`).
