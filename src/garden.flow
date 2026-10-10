@@ -526,13 +526,22 @@ function plant_name(kind: i32) -> string {
 }
 
 function draw_hud(g: Gfx, plant: ptr<i32>, age: ptr<i32>,
+                  genes_a: ptr<u32>, genes_b: ptr<u32>,
                   weather: i32, brush: i32, paused: bool, in_3d: bool) -> void {
     let mut clover: i32 = 0
     let mut flowers: i32 = 0
     let mut ferns: i32 = 0
     let mut shrubs: i32 = 0
     let mut blossoms: i32 = 0
+    let mut stature_total: f32 = 0.0
+    let mut branch_total: f32 = 0.0
+    let mut living: i32 = 0
     for i in 0 to CELLS {
+        if plant[i] > 0 {
+            living = living + 1
+            stature_total = stature_total + gene_value(genes_a[i], genes_b[i], 8)
+            branch_total = branch_total + gene_value(genes_a[i], genes_b[i], 16)
+        }
         if plant[i] == 1 { clover = clover + 1 }
         if plant[i] == 2 {
             flowers = flowers + 1
@@ -580,6 +589,14 @@ function draw_hud(g: Gfx, plant: ptr<i32>, age: ptr<i32>,
         let j8: i32 = gfx_draw_text(g, 552, 542, "X TEMPERATE", 1, 186, 212, 187)
         let j9: i32 = gfx_draw_text(g, 552, 560, "C DROUGHT", 1, 186, 212, 187)
         let j10: i32 = gfx_draw_text(g, 552, 578, "TAB 2D MAP", 1, 186, 212, 187)
+    }
+    if living > 0 {
+        let mean_stature: i32 = (stature_total * 100.0 / (living as f32)) as i32
+        let mean_branch: i32 = (branch_total * 100.0 / (living as f32)) as i32
+        let gene_label1: i32 = gfx_draw_text(g, 552, 607, "HEIGHT GENE", 1, 148, 187, 132)
+        let gene_value1: i32 = gfx_draw_int(g, 681, 606, mean_stature, 1, 227, 218, 157)
+        let gene_label2: i32 = gfx_draw_text(g, 552, 630, "BRANCH GENE", 1, 148, 187, 132)
+        let gene_value2: i32 = gfx_draw_int(g, 681, 629, mean_branch, 1, 227, 218, 157)
     }
     let l1: i32 = gfx_draw_text(g, 22, 620,
         "GROWTH = LOCAL DISPERSAL + RESOURCE COMPETITION + MICROCLIMATE", 1,
@@ -1230,7 +1247,7 @@ function main() -> i32 {
                           FIELD_Y + ((cam_z + 32.0) as i32) * TILE, TILE, TILE,
                           240, 230, 160)
         }
-        draw_hud(g, plant, age, weather, brush, paused, show3d)
+        draw_hud(g, plant, age, genes_a, genes_b, weather, brush, paused, show3d)
         if show3d {
             draw_minimap(g, mini, ground, plant, cam_x, cam_z, yaw)
             let mode_label: i32 = gfx_draw_text(g, 553, 368,
