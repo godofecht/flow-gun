@@ -793,6 +793,18 @@ function main() -> i32 {
     let mut was_dragging: bool = false
     let mut previous_wheel: i32 = 0
     let mut previous_ms: f64 = gfx_time_ms(g)
+    # In a resting camera the ecology evolves only every third UI frame.
+    # Keep the last depth-tested RGB framebuffer, avoiding redundant
+    # software triangle/sprite rasterization on all unchanged frames.
+    let mut rendered_epoch: i32 = -1
+    let mut rendered_x: f32 = 10000.0
+    let mut rendered_z: f32 = 10000.0
+    let mut rendered_y: f32 = 10000.0
+    let mut rendered_yaw: f32 = 10000.0
+    let mut rendered_pitch: f32 = 10000.0
+    let mut rendered_zoom: f32 = 10000.0
+    let mut rendered_fov: f32 = 10000.0
+    let mut rendered_orbit: bool = false
     m4_identity(p_model)
     let mut frame: i32 = 0
 
@@ -943,6 +955,7 @@ function main() -> i32 {
                 seed = next_random()
                 reset_world(seed, ground, wet, food, plant, age)
                 build_garden_surface(ground, wet, heights)
+                rendered_epoch = -1
             }
             key_r_held = true
         } else {
@@ -974,32 +987,52 @@ function main() -> i32 {
 
         gfx_clear(g, 13, 23, 21)
         if show3d {
-            let fwd3: V3 = r3d_forward(yaw, pitch)
-            let mut eye: V3 = v3(cam_x, cam_y, cam_z)
-            if orbit {
-                let sx: i32 = r3d_clampf(cam_x + 32.0, 0.0, 63.0) as i32
-                let sz: i32 = r3d_clampf(cam_z + 32.0, 0.0, 63.0) as i32
-                let focus_y: f32 = terrain_height_at(heights, cam_x, cam_z)
-                let target: V3 = v3(cam_x, focus_y, cam_z)
-                eye = v3_sub(target, v3_scale(fwd3, zoom))
-                m4_look_at(p_view, eye, target, v3(0.0, 1.0, 0.0))
-            } else {
-                m4_look_at(p_view, eye, v3_add(eye, fwd3),
-                           v3(0.0, 1.0, 0.0))
+            let camera_changed: bool =
+                abs32(cam_x - rendered_x) > 0.0005 or
+                abs32(cam_z - rendered_z) > 0.0005 or
+                (!orbit and abs32(cam_y - rendered_y) > 0.0005) or
+                abs32(yaw - rendered_yaw) > 0.0003 or
+                abs32(pitch - rendered_pitch) > 0.0003 or
+                abs32(zoom - rendered_zoom) > 0.0005 or
+                abs32(fov - rendered_fov) > 0.0005 or
+                rendered_orbit != orbit
+            if camera_changed or epoch != rendered_epoch {
+                let fwd3: V3 = r3d_forward(yaw, pitch)
+                let mut eye: V3 = v3(cam_x, cam_y, cam_z)
+                if orbit {
+                    let focus_y: f32 = terrain_height_at(heights, cam_x, cam_z)
+                    let target: V3 = v3(cam_x, focus_y, cam_z)
+                    eye = v3_sub(target, v3_scale(fwd3, zoom))
+                    m4_look_at(p_view, eye, target, v3(0.0, 1.0, 0.0))
+                } else {
+                    m4_look_at(p_view, eye, v3_add(eye, fwd3),
+                               v3(0.0, 1.0, 0.0))
+                }
+                m4_perspective(p_proj, r3d_radians(fov),
+                               (SCENE_W as f32) / (SCENE_H as f32), 0.12, 160.0)
+                m4_mul(p_vp, projection, view)
+                r3d_clear_gradient(v3(0.28, 0.45, 0.58), v3(0.75, 0.78, 0.63))
+                r3d_draw_mesh(model, viewproj, v3(0.38, 0.78, 0.42), R3D_GOURAUD)
+                paint_living_3d(viewproj, plant, age, wet, heights,
+                                eye.x, eye.z, fwd3.x, fwd3.z, orbit)
+                rendered_epoch = epoch
+                rendered_x = cam_x
+                rendered_z = cam_z
+                rendered_y = cam_y
+                rendered_yaw = yaw
+                rendered_pitch = pitch
+                rendered_zoom = zoom
+                rendered_fov = fov
+                rendered_orbit = orbit
             }
-            m4_perspective(p_proj, r3d_radians(fov),
-                           (SCENE_W as f32) / (SCENE_H as f32), 0.12, 160.0)
-            m4_mul(p_vp, projection, view)
-            r3d_clear_gradient(v3(0.28, 0.45, 0.58), v3(0.75, 0.78, 0.63))
-            r3d_draw_mesh(model, viewproj, v3(0.38, 0.78, 0.42), R3D_GOURAUD)
-            paint_living_3d(viewproj, plant, age, wet, heights,
-                            eye.x, eye.z, fwd3.x, fwd3.z, orbit)
             gfx_blit_rgb(g, FIELD_X, FIELD_Y, SCENE_W, SCENE_H, r3d_pixels())
             let mode_text: i32 = gfx_draw_text(g, 30, 577,
                 if orbit { "ORBIT / DRAG LOOK / SCROLL ZOOM / WASD PAN" }
                 else { "WALK / DRAG LOOK / WASD MOVE / F FAST" },
                 1, 222, 223, 185)
         } else {
+            # Planting or resetting from 2D must invalidate 3D's cached image.
+            rendered_epoch = -1
             draw_garden(g, pixels, ground, wet, plant, age)
             gfx_fill_rect(g, FIELD_X + ((cam_x + 32.0) as i32) * TILE,
                           FIELD_Y + ((cam_z + 32.0) as i32) * TILE, TILE, TILE,
