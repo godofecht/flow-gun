@@ -48,11 +48,23 @@ jobs:
           test -s dist/garden/index.html
           test -s dist/garden/garden.wasm
           test -s dist/garden/garden.js
+      - name: Install immersive garden canvas stylesheet
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          page = Path("dist/garden/index.html")
+          html = page.read_text()
+          assert "</head>" in html
+          html = html.replace("</head>", '<link rel="stylesheet" href="../embed.css">\\n</head>')
+          page.write_text(html)
+          PY
       - name: Prepare website
         run: |
           cp -R site/. dist/
           touch dist/.nojekyll
           test -s dist/index.html
+          test -s dist/embed.css
+          grep -q '../embed.css' dist/garden/index.html
       - name: Upload site preview
         uses: actions/upload-artifact@v4
         with:
