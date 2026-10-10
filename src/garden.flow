@@ -577,24 +577,29 @@ function draw_hud(g: Gfx, plant: ptr<i32>, age: ptr<i32>,
     }
 }
 
-function fingerprint(plant: ptr<i32>, age: ptr<i32>, wet: ptr<f32>) -> u32 {
+function fingerprint(plant: ptr<i32>, age: ptr<i32>, wet: ptr<f32>,
+                     genes_a: ptr<u32>, genes_b: ptr<u32>) -> u32 {
     let mut h: u32 = 2166136261
     for i in 0 to CELLS {
         let n: u32 = ((plant[i] * 307 + age[i]) as u32) +
                        ((wet[i] * 1000.0) as u32)
         h = (h ^ n) * 16777619
+        h = (h ^ genes_a[i]) * 16777619
+        h = (h ^ genes_b[i]) * 16777619
     }
     return h
 }
 
 function verify_state(ground: ptr<i32>, plant: ptr<i32>,
-                      wet: ptr<f32>, food: ptr<f32>) -> bool {
+                      wet: ptr<f32>, food: ptr<f32>,
+                      genes_a: ptr<u32>, genes_b: ptr<u32>) -> bool {
     let mut alive: i32 = 0
     for i in 0 to CELLS {
         if wet[i] < 0.0 or wet[i] > 1.0 { return false }
         if food[i] < 0.0 or food[i] > 1.0 { return false }
         if ground[i] != 0 and plant[i] != 0 { return false }
         if plant[i] < 0 or plant[i] > 4 { return false }
+        if plant[i] == 0 and (genes_a[i] != 0 or genes_b[i] != 0) { return false }
         if plant[i] > 0 { alive = alive + 1 }
     }
     return alive > 0
@@ -808,31 +813,37 @@ function main() -> i32 {
     let plant_next: array<i32, 4096> = [0, 0, 0, 0]
     let age: array<i32, 4096> = [0, 0, 0, 0]
     let age_next: array<i32, 4096> = [0, 0, 0, 0]
+    let genes_a: array<u32, 4096> = [0, 0, 0, 0]
+    let genes_b: array<u32, 4096> = [0, 0, 0, 0]
+    let genes_a_next: array<u32, 4096> = [0, 0, 0, 0]
+    let genes_b_next: array<u32, 4096> = [0, 0, 0, 0]
     let pixels: array<u8, 786432> = [0, 0, 0, 0]
 
     # Test invariants and reproducibility before opening a native window.
     let mut seed: u32 = 20261010
-    reset_world(seed, ground, wet, food, plant, age)
+    reset_world(seed, ground, wet, food, plant, age, genes_a, genes_b)
     for t in 0 to 90 {
         step_world(ground, wet, wet_next, food, food_next,
-                   plant, plant_next, age, age_next, 0)
+                   plant, plant_next, age, age_next,
+                   genes_a, genes_b, genes_a_next, genes_b_next, 0)
     }
-    if !verify_state(ground, plant, wet, food) {
+    if !verify_state(ground, plant, wet, food, genes_a, genes_b) {
         println("FAIL: garden state invariants")
         return 1
     }
-    let expected: u32 = fingerprint(plant, age, wet)
-    reset_world(seed, ground, wet, food, plant, age)
+    let expected: u32 = fingerprint(plant, age, wet, genes_a, genes_b)
+    reset_world(seed, ground, wet, food, plant, age, genes_a, genes_b)
     for t in 0 to 90 {
         step_world(ground, wet, wet_next, food, food_next,
-                   plant, plant_next, age, age_next, 0)
+                   plant, plant_next, age, age_next,
+                   genes_a, genes_b, genes_a_next, genes_b_next, 0)
     }
-    if fingerprint(plant, age, wet) != expected {
+    if fingerprint(plant, age, wet, genes_a, genes_b) != expected {
         println("FAIL: nondeterministic seeded garden")
         return 2
     }
     println("PASS: habitat invariants and seeded determinism")
-    reset_world(seed, ground, wet, food, plant, age)
+    reset_world(seed, ground, wet, food, plant, age, genes_a, genes_b)
 
     let g: Gfx = gfx_open(WIN_W, WIN_H, "Flow Garden - morphogenetic world")
     let mut weather: i32 = 0
@@ -1040,7 +1051,7 @@ function main() -> i32 {
         if gfx_key_down(g, KEY_R) {
             if !key_r_held {
                 seed = next_random()
-                reset_world(seed, ground, wet, food, plant, age)
+                reset_world(seed, ground, wet, food, plant, age, genes_a, genes_b)
                 build_garden_surface(ground, wet, heights)
                 rendered_epoch = -1
             }
@@ -1060,16 +1071,21 @@ function main() -> i32 {
                     cam_z = (my as f32) - 31.5
                     plant[cell] = brush
                     age[cell] = 1
+                    genes_a[cell] = founder_chromosome()
+                    genes_b[cell] = founder_chromosome()
                 }
                 if mouse.right != 0 {
                     plant[cell] = 0
                     age[cell] = 0
+                    genes_a[cell] = 0
+                    genes_b[cell] = 0
                 }
             }
         }
         if !paused and frame % 3 == 0 {
             step_world(ground, wet, wet_next, food, food_next,
-                       plant, plant_next, age, age_next, weather)
+                       plant, plant_next, age, age_next,
+                           genes_a, genes_b, genes_a_next, genes_b_next, weather)
         }
 
         gfx_clear(g, 13, 23, 21)
