@@ -50,15 +50,15 @@
       <div class="wrap">
         <div class="section-label"><span class="section-marker">01</span><span>YOUR WORLD, IN MOTION</span><span class="hairline"></span><span class="live"><span class="dot"></span> LIVE WEBASSEMBLY</span></div>
         <div class="experience-head"><div><h2 id="garden-title">Make something <em>grow.</em></h2><p>Everything below is rendered by the original Flow program, compiled to WebAssembly — no JavaScript simulation substitute.</p></div><a class="outline-link" href="./garden/index.html?autostart=1" target="_blank" rel="noopener noreferrer">Open fullscreen ↗</a></div>
-        <div class="dimension-controls" role="group" aria-label="Garden dimension"><span>EXPLORE THE SAME WORLD IN</span><button id="toggle-dimension" type="button" aria-pressed="false">↗ Switch 2D / 3D <span class="dim-key">TAB</span></button><span class="dim-detail">In 3D: WASD move · arrows look · V change height</span></div>
+        <div class="dimension-controls" role="group" aria-label="Garden dimension"><span>EXPLORE THE SAME WORLD IN</span><button id="toggle-dimension" type="button" aria-pressed="false">↗ Switch 2D / 3D <span class="dim-key">TAB</span></button><span class="dim-detail">3D: drag to look · scroll to zoom · WASD pan or walk</span><button id="camera-mode" type="button" aria-pressed="false">◉ Orbit / Walk <span class="dim-key">V</span></button><button id="camera-reset" type="button">↺ Reset view <span class="dim-key">SPACE</span></button></div>
         <div class="playground">
           <div class="frame-top"><span class="window-dot red"></span><span class="window-dot amber"></span><span class="window-dot green"></span><span class="window-title">flow-garden / living-system.flow</span><span class="wasm-badge">FLOW → WASM</span></div>
           <div class="game-area">
             <iframe id="garden-frame" src="./garden/index.html?autostart=1" title="Interactive Flow Garden — click Start in the frame, then plant with the mouse or change weather using the keyboard" loading="eager" allow="fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe>
           </div>
-          <div class="frame-bottom"><span><span class="dot"></span> SELF-ORGANISING ECOSYSTEM</span><button id="restart" type="button" aria-label="Reload the garden simulation">↻ &nbsp; Restart simulation</button></div>
+          <div class="frame-bottom"><span><span class="dot"></span> SELF-ORGANISING ECOSYSTEM · FLOW WEBASSEMBLY</span><button id="restart" type="button" aria-label="Reload the garden simulation">↻ &nbsp; Restart simulation</button></div>
         </div>
-        <p class="play-hint"><strong>First time?</strong> The WebAssembly garden starts automatically. On desktop, click the simulation to focus it, then use keyboard controls or plant directly with the mouse.</p>
+        <p class="play-hint"><strong>First time?</strong> The WebAssembly garden starts automatically. Switch to 3D with Tab or the button above. Orbit mode inspects the whole garden; press V to walk at ground level. Hold and drag to look, scroll to zoom in orbit, use WASD to move, F for a faster walk, and Space to reset the camera. Return to 2D to plant.</p>
         <div class="controls" aria-label="Garden controls">
           <div><span class="key">1—4</span><span>Choose species</span></div>
           <div><span class="key mouse">◉</span><span>Plant / erase with mouse</span></div>
