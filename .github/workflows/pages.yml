@@ -40,6 +40,8 @@ jobs:
           version: '4.0.13'
       - name: Verify Emscripten
         run: emcc --version
+      - name: Validate website JavaScript
+        run: node --check site/site.js
       - name: Build actual Flow garden to WebAssembly
         run: |
           ./flow-sdk/flow wasm src/garden.flow --backend=c --out dist/garden
@@ -57,13 +59,6 @@ jobs:
           name: flow-garden-site
           path: dist/
           include-hidden-files: true
-      - name: Prefer Actions build source over branch-based Jekyll
-        id: source-mode
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api --method PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
       - name: Configure GitHub Pages
         id: pages-config
         continue-on-error: true
