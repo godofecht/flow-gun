@@ -1,0 +1,588 @@
+# FLOW GARDEN — a small morphogenetic world, not a prepainted picture.
+#
+# Cells carry soil moisture, nutrients, occupation, and developmental age.
+# Dispersal is local, fitness depends on the microhabitat, and resources
+# are consumed and replenished. The path and pond constrain colonisation.
+# All randomness is a deterministic LCG seeded on reset.
+#
+# Run with: flow gfx src/garden.flow
+# Record with: flow record src/garden.flow --frames 120 --out /tmp/garden
+#
+# 1-4 choose brush: clover / flower / fern / shrub
+# LMB plant, RMB clear, W rain, S temperate, D drought, R reseed, P pause.
+
+import "stdlib/gfx.flow"
+import "stdlib/text.flow"
+
+const MAP: i32 = 64
+const CELLS: i32 = 4096
+const TILE: i32 = 8
+const FIELD_X: i32 = 20
+const FIELD_Y: i32 = 90
+const WIN_W: i32 = 742
+const WIN_H: i32 = 660
+const MAX_FRAMES: i32 = 24000
+
+const KEY_1: i32 = 18
+const KEY_2: i32 = 19
+const KEY_3: i32 = 20
+const KEY_4: i32 = 21
+const KEY_P: i32 = 35
+
+let mut rng_state: u32 = 20261010
+let mut epoch: i32 = 0
+
+function next_random() -> u32 {
+    rng_state = rng_state * 1664525 + 1013904223
+    return rng_state
+}
+
+function random_unit() -> f32 {
+    return (((next_random() >> 8) % 65536) as f32) / 65536.0
+}
+
+function random_below(n: i32) -> i32 {
+    return ((next_random() >> 8) % (n as u32)) as i32
+}
+
+function hash_xy(x: i32, y: i32) -> u32 {
+    let mut h: u32 = ((x + 1) as u32) * 374761393
+    h = h + ((y + 1) as u32) * 668265263
+    h = (h ^ (h >> 13)) * 1274126177
+    return h ^ (h >> 16)
+}
+
+function clamp01(v: f32) -> f32 {
+    if v < 0.0 { return 0.0 }
+    if v > 1.0 { return 1.0 }
+    return v
+}
+
+function abs32(v: f32) -> f32 {
+    if v < 0.0 { return 0.0 - v }
+    return v
+}
+
+# A designed substrate, but never a designed plant silhouette.
+# 0 soil, 1 pond, 2 winding stepping-stone path.
+function ground_at(x: i32, y: i32) -> i32 {
+    let dx: i32 = x - 48
+    let dy: i32 = y - 14
+    let edge: i32 = (hash_xy(x, y) % 7) as i32 - 3
+    if dx * dx * 64 + dy * dy * 144 < 64 * 144 * 64 + edge * 850 {
+        return 1
+    }
+    let centre: i32 = 20 + y / 5 - (y * y) / 300
+    let shift: i32 = ((hash_xy(x / 2, y / 3) >> 8) % 3) as i32 - 1
+    if x > 4 and x < 59 and abs32((x - centre - shift) as f32) < 1.5 {
+        return 2
+    }
+    return 0
+}
+
+function plant_fitness(kind: i32, wet: f32, food: f32,
+                       sunlight: f32) -> f32 {
+    let mut suitability: f32 = 0.0
+    if kind == 1 {
+        # Clover: thrives in disturbed, average-moisture soil.
+        suitability = 1.0 - 1.4 * abs32(wet - 0.49)
+        suitability = suitability * (0.75 + 0.25 * sunlight)
+    }
+    if kind == 2 {
+        # Wildflowers: need sunlight to flower and reproduce.
+        suitability = 1.0 - 1.9 * abs32(wet - 0.55)
+        suitability = suitability * (0.18 + 0.82 * sunlight)
+    }
+    if kind == 3 {
+        # Ferns: damp shade, poor in exposed dry beds.
+        suitability = 1.0 - 1.9 * abs32(wet - 0.77)
+        suitability = suitability * (1.08 - 0.35 * sunlight)
+    }
+    if kind == 4 {
+        # Shrubs: tolerant of low moisture, but slow to colonise.
+        suitability = 1.0 - 1.5 * abs32(wet - 0.37)
+        suitability = suitability * (0.60 + 0.40 * sunlight)
+    }
+    return clamp01(suitability) * (0.18 + 0.82 * clamp01(food))
+}
+
+function neighbouring_shrubs(plants: ptr<i32>, i: i32,
+                             left: i32, right: i32,
+                             up: i32, down: i32) -> i32 {
+    let mut n: i32 = 0
+    if left != i and plants[left] == 4 { n = n + 1 }
+    if right != i and plants[right] == 4 { n = n + 1 }
+    if up != i and plants[up] == 4 { n = n + 1 }
+    if down != i and plants[down] == 4 { n = n + 1 }
+    return n
+}
+
+function reset_world(seed: u32, ground: ptr<i32>, wet: ptr<f32>,
+                     food: ptr<f32>, plant: ptr<i32>, age: ptr<i32>) -> void {
+    rng_state = seed
+    epoch = 0
+    for y in 0 to MAP {
+        for x in 0 to MAP {
+            let i: i32 = y * MAP + x
+            ground[i] = ground_at(x, y)
+            let dx: f32 = (x - 48) as f32
+            let dy: f32 = (y - 14) as f32
+            let near_pond: f32 = clamp01(1.0 - (dx * dx + dy * dy) / 750.0)
+            let grain: f32 = ((hash_xy(x, y) % 1000) as f32) / 1000.0
+            wet[i] = clamp01(0.37 + 0.44 * near_pond +
+                             0.15 * ((y as f32) / 64.0) + 0.12 * grain)
+            food[i] = 0.56 + 0.32 * grain
+            plant[i] = 0
+            age[i] = 0
+            if ground[i] == 1 { wet[i] = 1.0 }
+        }
+    }
+    # All species begin as scattered seeds, not predetermined silhouettes.
+    for k in 0 to 130 {
+        let x: i32 = 3 + random_below(MAP - 6)
+        let y: i32 = 3 + random_below(MAP - 6)
+        let i: i32 = y * MAP + x
+        if ground[i] == 0 {
+            let kind: i32 = 1 + random_below(4)
+            let light: f32 = 0.63 + 0.28 * ((x as f32) / 64.0)
+            if plant_fitness(kind, wet[i], food[i], light) > 0.21 {
+                plant[i] = kind
+                age[i] = 1 + random_below(4)
+            }
+        }
+    }
+}
+
+# Jacobi (double-buffered) update: reading old cells only removes scan-order
+# advantages. Cells see local neighbours, not the garden's global state.
+function step_world(ground: ptr<i32>,
+                    wet: ptr<f32>, wet_next: ptr<f32>,
+                    food: ptr<f32>, food_next: ptr<f32>,
+                    plant: ptr<i32>, plant_next: ptr<i32>,
+                    age: ptr<i32>, age_next: ptr<i32>,
+                    weather: i32) -> void {
+    for y in 0 to MAP {
+        for x in 0 to MAP {
+            let i: i32 = y * MAP + x
+            let l: i32 = if_left(x, i)
+            let r: i32 = if_right(x, i)
+            let u: i32 = if_up(y, i)
+            let d: i32 = if_down(y, i)
+
+            let mut rain: f32 = 0.0036
+            let mut evaporation: f32 = 0.0031
+            if weather == 1 { rain = 0.0170; evaporation = 0.0018 }
+            if weather == 2 { rain = 0.0; evaporation = 0.0150 }
+            let neighbor_water: f32 = (wet[l] + wet[r] + wet[u] + wet[d]) * 0.25
+            let uptake: f32 = if_plant_uptake(plant[i])
+            wet_next[i] = clamp01(wet[i] + 0.12 * (neighbor_water - wet[i]) +
+                                  rain - evaporation - uptake)
+            if ground[i] == 1 { wet_next[i] = 1.0 }
+
+            let decay: f32 = if_food_uptake(plant[i])
+            food_next[i] = clamp01(food[i] + 0.004 +
+                          0.04 * ((food[l] + food[r] + food[u] + food[d]) * 0.25 - food[i]) -
+                          decay)
+            plant_next[i] = 0
+            age_next[i] = 0
+
+            if ground[i] == 0 {
+                let bushes: i32 = neighbouring_shrubs(plant, i, l, r, u, d)
+                let light: f32 = clamp01((0.66 + 0.24 * ((x as f32) / 64.0)) *
+                                         (1.0 - 0.14 * (bushes as f32)))
+                let old: i32 = plant[i]
+                if old > 0 {
+                    let fit: f32 = plant_fitness(old, wet[i], food[i], light)
+                    let mut danger: f32 = 0.0008
+                    if fit < 0.18 { danger = danger + 0.12 }
+                    if fit < 0.36 { danger = danger + 0.018 }
+                    if age[i] > 260 { danger = danger + 0.012 }
+                    if random_unit() >= danger {
+                        plant_next[i] = old
+                        age_next[i] = age[i] + 1
+                    } else {
+                        # Litter recycles into soil; future life may use it.
+                        food_next[i] = clamp01(food_next[i] + 0.12)
+                    }
+                } else {
+                    # One neighbouring parent proposes a daughter cell.
+                    # Species differ only in local ecological rules.
+                    let direction: i32 = random_below(4)
+                    let mut source: i32 = l
+                    if direction == 1 { source = r }
+                    if direction == 2 { source = u }
+                    if direction == 3 { source = d }
+                    let parent: i32 = plant[source]
+                    if parent > 0 and source != i {
+                        let fit: f32 = plant_fitness(parent, wet[i], food[i], light)
+                        let mut spread: f32 = 0.36
+                        if parent == 2 { spread = 0.28 }
+                        if parent == 3 { spread = 0.24 }
+                        if parent == 4 { spread = 0.11 }
+                        if random_unit() < spread * fit {
+                            plant_next[i] = parent
+                            age_next[i] = 1
+                        }
+                    } else {
+                        # Rare seed-bank recruitment prevents permanent stasis.
+                        if random_unit() < 0.00013 {
+                            let candidate: i32 = 1 + random_below(4)
+                            if plant_fitness(candidate, wet[i], food[i], light) > 0.32 {
+                                plant_next[i] = candidate
+                                age_next[i] = 1
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for i in 0 to CELLS {
+        wet[i] = wet_next[i]
+        food[i] = food_next[i]
+        plant[i] = plant_next[i]
+        age[i] = age_next[i]
+    }
+    epoch = epoch + 1
+}
+
+function if_left(x: i32, i: i32) -> i32 {
+    if x > 0 { return i - 1 }
+    return i
+}
+function if_right(x: i32, i: i32) -> i32 {
+    if x < MAP - 1 { return i + 1 }
+    return i
+}
+function if_up(y: i32, i: i32) -> i32 {
+    if y > 0 { return i - MAP }
+    return i
+}
+function if_down(y: i32, i: i32) -> i32 {
+    if y < MAP - 1 { return i + MAP }
+    return i
+}
+function if_plant_uptake(kind: i32) -> f32 {
+    if kind > 0 { return 0.0020 }
+    return 0.0
+}
+function if_food_uptake(kind: i32) -> f32 {
+    if kind == 1 { return 0.0055 }
+    if kind == 2 { return 0.0070 }
+    if kind == 3 { return 0.0050 }
+    if kind == 4 { return 0.0030 }
+    return 0.0
+}
+
+function put_pixel(fb: ptr<u8>, x: i32, y: i32,
+                   red: i32, green: i32, blue: i32) -> void {
+    if x < 0 or x >= 512 or y < 0 or y >= 512 { return }
+    let offset: i32 = 3 * (y * 512 + x)
+    fb[offset] = red as u8
+    fb[offset + 1] = green as u8
+    fb[offset + 2] = blue as u8
+}
+
+function draw_square(fb: ptr<u8>, x: i32, y: i32, w: i32,
+                     red: i32, green: i32, blue: i32) -> void {
+    for yy in 0 to w {
+        for xx in 0 to w {
+            put_pixel(fb, x + xx, y + yy, red, green, blue)
+        }
+    }
+}
+
+function draw_tile(fb: ptr<u8>, x: i32, y: i32, terrain: i32,
+                   species: i32, life: i32, moisture: f32, day: i32) -> void {
+    let px: i32 = x * TILE
+    let py: i32 = y * TILE
+    let h: u32 = hash_xy(x, y)
+    let grain: i32 = (h % 13) as i32
+    let mut rr: i32 = 42 + grain
+    let mut gg: i32 = 48 + (moisture * 19.0) as i32 + grain
+    let mut bb: i32 = 32 + grain
+    if terrain == 1 {
+        rr = 29 + grain / 3
+        gg = 79 + grain
+        bb = 91 + grain * 2
+    }
+    if terrain == 2 {
+        rr = 144 + grain
+        gg = 131 + grain
+        bb = 98 + grain
+    }
+    draw_square(fb, px, py, 8, rr, gg, bb)
+
+    if terrain == 1 {
+        if (x * 3 + y + day / 5) % 9 < 4 {
+            draw_square(fb, px + 2, py + 3, 3, 49, 133, 135)
+        }
+        return
+    }
+    if terrain == 2 {
+        draw_square(fb, px + 1, py + 1, 5, rr + 15, gg + 12, bb + 8)
+        put_pixel(fb, px + 6, py + 6, 99, 99, 75)
+        return
+    }
+
+    if (h % 17) == 0 {
+        put_pixel(fb, px + 2, py + 6, 96, 114, 70)
+    }
+    if species == 0 { return }
+
+    if species == 1 {
+        # Four clover leaflets emerge from the occupied cell.
+        draw_square(fb, px + 1, py + 1, 3, 80, 151, 72)
+        draw_square(fb, px + 4, py + 1, 3, 101, 174, 87)
+        draw_square(fb, px + 1, py + 4, 3, 65, 139, 72)
+        draw_square(fb, px + 4, py + 4, 3, 94, 169, 80)
+        put_pixel(fb, px + 3, py + 3, 190, 205, 127)
+    }
+    if species == 2 {
+        # Leaves then a mature flower with a deterministic colour morph.
+        draw_square(fb, px + 1, py + 1, 6, 44, 121, 62)
+        put_pixel(fb, px + 1, py + 5, 88, 169, 82)
+        put_pixel(fb, px + 6, py + 2, 88, 169, 82)
+        if life >= 12 and moisture > 0.29 {
+            let mut pr: i32 = 235
+            let mut pg: i32 = 133
+            let mut pb: i32 = 171
+            if h % 3 == 1 { pr = 183; pg = 151; pb = 235 }
+            if h % 3 == 2 { pr = 253; pg = 197; pb = 109 }
+            draw_square(fb, px + 3, py + 0, 2, pr, pg, pb)
+            draw_square(fb, px + 3, py + 6, 2, pr, pg, pb)
+            draw_square(fb, px + 0, py + 3, 2, pr, pg, pb)
+            draw_square(fb, px + 6, py + 3, 2, pr, pg, pb)
+            draw_square(fb, px + 3, py + 3, 2, 255, 224, 108)
+        }
+    }
+    if species == 3 {
+        # Fern's alternating fronds are a local developmental motif.
+        for k in 1 to 7 {
+            put_pixel(fb, px + 3, py + k, 86, 186, 99)
+            if k % 2 == 0 {
+                put_pixel(fb, px + 1, py + k - 1, 54, 143, 75)
+                put_pixel(fb, px + 2, py + k, 67, 166, 83)
+            } else {
+                put_pixel(fb, px + 5, py + k - 1, 61, 159, 84)
+                put_pixel(fb, px + 4, py + k, 104, 194, 102)
+            }
+        }
+    }
+    if species == 4 {
+        # Shrub crowns become denser as individual cells age.
+        draw_square(fb, px + 1, py + 1, 6, 31, 96, 58)
+        draw_square(fb, px + 2, py + 1, 4, 50, 128, 66)
+        if life > 18 {
+            draw_square(fb, px + 1, py + 4, 3, 35, 105, 61)
+            draw_square(fb, px + 4, py + 3, 3, 65, 150, 77)
+            put_pixel(fb, px + 3, py + 3, 141, 181, 90)
+        }
+    }
+}
+
+function draw_garden(g: Gfx, fb: ptr<u8>, ground: ptr<i32>, wet: ptr<f32>,
+                     plant: ptr<i32>, age: ptr<i32>) -> void {
+    for y in 0 to MAP {
+        for x in 0 to MAP {
+            let i: i32 = y * MAP + x
+            draw_tile(fb, x, y, ground[i], plant[i], age[i], wet[i], epoch)
+        }
+    }
+    gfx_blit_rgb(g, FIELD_X, FIELD_Y, 512, 512, fb)
+}
+
+function weather_name(mode: i32) -> string {
+    if mode == 1 { return "RAINY" }
+    if mode == 2 { return "DROUGHT" }
+    return "TEMPERATE"
+}
+
+function plant_name(kind: i32) -> string {
+    if kind == 1 { return "CLOVER" }
+    if kind == 2 { return "WILDFLOWER" }
+    if kind == 3 { return "FERN" }
+    return "SHRUB"
+}
+
+function draw_hud(g: Gfx, plant: ptr<i32>, age: ptr<i32>,
+                  weather: i32, brush: i32, paused: bool) -> void {
+    let mut clover: i32 = 0
+    let mut flowers: i32 = 0
+    let mut ferns: i32 = 0
+    let mut shrubs: i32 = 0
+    let mut blossoms: i32 = 0
+    for i in 0 to CELLS {
+        if plant[i] == 1 { clover = clover + 1 }
+        if plant[i] == 2 {
+            flowers = flowers + 1
+            if age[i] >= 12 { blossoms = blossoms + 1 }
+        }
+        if plant[i] == 3 { ferns = ferns + 1 }
+        if plant[i] == 4 { shrubs = shrubs + 1 }
+    }
+
+    let a: i32 = gfx_draw_text(g, 22, 18, "FLOW GARDEN", 3, 236, 231, 194)
+    let b: i32 = gfx_draw_text(g, 22, 52, "A LIVING MORPHOGENETIC WORLD", 1, 145, 180, 147)
+    let c: i32 = gfx_draw_text(g, 552, 95, "ECOSYSTEM", 2, 236, 231, 194)
+    let d: i32 = gfx_draw_text(g, 552, 128, "DAY", 1, 127, 164, 130)
+    let e: i32 = gfx_draw_int(g, 590, 127, epoch, 2, 244, 217, 157)
+    let f: i32 = gfx_draw_text(g, 552, 166, "CLIMATE", 1, 127, 164, 130)
+    let h: i32 = gfx_draw_text(g, 552, 183, weather_name(weather), 2, 147, 203, 174)
+    let i1: i32 = gfx_draw_text(g, 552, 229, "LIVING COVER", 1, 127, 164, 130)
+    let i2: i32 = gfx_draw_text(g, 552, 252, "CLOVER", 1, 137, 203, 136)
+    let i3: i32 = gfx_draw_int(g, 678, 250, clover, 1, 226, 227, 207)
+    let i4: i32 = gfx_draw_text(g, 552, 272, "FLOWERS", 1, 223, 151, 187)
+    let i5: i32 = gfx_draw_int(g, 678, 270, flowers, 1, 226, 227, 207)
+    let i6: i32 = gfx_draw_text(g, 552, 292, "FERNS", 1, 110, 199, 136)
+    let i7: i32 = gfx_draw_int(g, 678, 290, ferns, 1, 226, 227, 207)
+    let i8: i32 = gfx_draw_text(g, 552, 312, "SHRUBS", 1, 89, 164, 118)
+    let i9: i32 = gfx_draw_int(g, 678, 310, shrubs, 1, 226, 227, 207)
+    let j1: i32 = gfx_draw_text(g, 552, 339, "BLOSSOMS", 1, 127, 164, 130)
+    let j2: i32 = gfx_draw_int(g, 656, 337, blossoms, 1, 251, 212, 129)
+    let j3: i32 = gfx_draw_text(g, 552, 389, "PLANTING", 1, 127, 164, 130)
+    let j4: i32 = gfx_draw_text(g, 552, 407, plant_name(brush), 2, 237, 227, 183)
+    let j5: i32 = gfx_draw_text(g, 552, 443, "1-4  SELECT", 1, 143, 169, 149)
+    let j6: i32 = gfx_draw_text(g, 552, 460, "CLICK  PLANT", 1, 143, 169, 149)
+    let j7: i32 = gfx_draw_text(g, 552, 477, "RIGHT  CLEAR", 1, 143, 169, 149)
+    let k1: i32 = gfx_draw_text(g, 552, 518, "W  RAIN", 1, 143, 169, 149)
+    let k2: i32 = gfx_draw_text(g, 552, 535, "S  TEMPERATE", 1, 143, 169, 149)
+    let k3: i32 = gfx_draw_text(g, 552, 552, "D  DROUGHT", 1, 143, 169, 149)
+    let k4: i32 = gfx_draw_text(g, 552, 569, "R  NEW GARDEN", 1, 143, 169, 149)
+    let k5: i32 = gfx_draw_text(g, 552, 586, "P  PAUSE", 1, 143, 169, 149)
+    let l1: i32 = gfx_draw_text(g, 22, 620,
+        "GROWTH = LOCAL DISPERSAL + RESOURCE COMPETITION + MICROCLIMATE", 1,
+        123, 153, 127)
+    let l2: i32 = gfx_draw_text(g, 22, 635,
+        "SOIL  /  WATER  /  STONE  /  CLOVER  /  FLOWER  /  FERN  /  SHRUB",
+        1, 123, 153, 127)
+    if paused {
+        let stop: i32 = gfx_draw_text(g, 552, 65, "PAUSED", 2, 243, 150, 125)
+    }
+}
+
+function fingerprint(plant: ptr<i32>, age: ptr<i32>, wet: ptr<f32>) -> u32 {
+    let mut h: u32 = 2166136261
+    for i in 0 to CELLS {
+        let n: u32 = ((plant[i] * 307 + age[i]) as u32) +
+                       ((wet[i] * 1000.0) as u32)
+        h = (h ^ n) * 16777619
+    }
+    return h
+}
+
+function verify_state(ground: ptr<i32>, plant: ptr<i32>,
+                      wet: ptr<f32>, food: ptr<f32>) -> bool {
+    let mut alive: i32 = 0
+    for i in 0 to CELLS {
+        if wet[i] < 0.0 or wet[i] > 1.0 { return false }
+        if food[i] < 0.0 or food[i] > 1.0 { return false }
+        if ground[i] != 0 and plant[i] != 0 { return false }
+        if plant[i] < 0 or plant[i] > 4 { return false }
+        if plant[i] > 0 { alive = alive + 1 }
+    }
+    return alive > 0
+}
+
+function main() -> i32 {
+    let ground: array<i32, 4096> = [0, 0, 0, 0]
+    let wet: array<f32, 4096> = [0.0, 0.0, 0.0, 0.0]
+    let wet_next: array<f32, 4096> = [0.0, 0.0, 0.0, 0.0]
+    let food: array<f32, 4096> = [0.0, 0.0, 0.0, 0.0]
+    let food_next: array<f32, 4096> = [0.0, 0.0, 0.0, 0.0]
+    let plant: array<i32, 4096> = [0, 0, 0, 0]
+    let plant_next: array<i32, 4096> = [0, 0, 0, 0]
+    let age: array<i32, 4096> = [0, 0, 0, 0]
+    let age_next: array<i32, 4096> = [0, 0, 0, 0]
+    let pixels: array<u8, 786432> = [0, 0, 0, 0]
+
+    # Test invariants and reproducibility before opening a native window.
+    let seed: u32 = 20261010
+    reset_world(seed, ground, wet, food, plant, age)
+    for t in 0 to 90 {
+        step_world(ground, wet, wet_next, food, food_next,
+                   plant, plant_next, age, age_next, 0)
+    }
+    if !verify_state(ground, plant, wet, food) {
+        println("FAIL: garden state invariants")
+        return 1
+    }
+    let expected: u32 = fingerprint(plant, age, wet)
+    reset_world(seed, ground, wet, food, plant, age)
+    for t in 0 to 90 {
+        step_world(ground, wet, wet_next, food, food_next,
+                   plant, plant_next, age, age_next, 0)
+    }
+    if fingerprint(plant, age, wet) != expected {
+        println("FAIL: nondeterministic seeded garden")
+        return 2
+    }
+    println("PASS: habitat invariants and seeded determinism")
+    reset_world(seed, ground, wet, food, plant, age)
+
+    let g: Gfx = gfx_open(WIN_W, WIN_H, "Flow Garden - morphogenetic world")
+    let mut weather: i32 = 0
+    let mut brush: i32 = 2
+    let mut paused: bool = false
+    let mut key_p_held: bool = false
+    let mut key_r_held: bool = false
+    let mut frame: i32 = 0
+
+    while frame < MAX_FRAMES {
+        if !gfx_frame_pump(g) { break }
+        if gfx_key_down(g, KEY_1) { brush = 1 }
+        if gfx_key_down(g, KEY_2) { brush = 2 }
+        if gfx_key_down(g, KEY_3) { brush = 3 }
+        if gfx_key_down(g, KEY_4) { brush = 4 }
+        if gfx_key_down(g, KEY_W) { weather = 1 }
+        if gfx_key_down(g, KEY_S) { weather = 0 }
+        if gfx_key_down(g, KEY_D) { weather = 2 }
+        if gfx_key_down(g, KEY_P) {
+            if !key_p_held { paused = !paused }
+            key_p_held = true
+        } else {
+            key_p_held = false
+        }
+        if gfx_key_down(g, KEY_R) {
+            if !key_r_held {
+                seed = next_random()
+                reset_world(seed, ground, wet, food, plant, age)
+            }
+            key_r_held = true
+        } else {
+            key_r_held = false
+        }
+
+        let mouse: Mouse = gfx_mouse(g)
+        let mx: i32 = (mouse.x - FIELD_X) / TILE
+        let my: i32 = (mouse.y - FIELD_Y) / TILE
+        if mouse.inside != 0 and mouse.x >= FIELD_X and mouse.y >= FIELD_Y
+           and mx >= 0 and mx < MAP and my >= 0 and my < MAP {
+            let cell: i32 = my * MAP + mx
+            if ground[cell] == 0 {
+                if mouse.left != 0 {
+                    plant[cell] = brush
+                    age[cell] = 1
+                }
+                if mouse.right != 0 {
+                    plant[cell] = 0
+                    age[cell] = 0
+                }
+            }
+        }
+        if !paused and frame % 3 == 0 {
+            step_world(ground, wet, wet_next, food, food_next,
+                       plant, plant_next, age, age_next, weather)
+        }
+
+        gfx_clear(g, 13, 23, 21)
+        draw_garden(g, pixels, ground, wet, plant, age)
+        draw_hud(g, plant, age, weather, brush, paused)
+        gfx_present(g)
+        gfx_wait_frame(g, 60)
+        frame = frame + 1
+    }
+    gfx_close(g)
+    return 0
+}
