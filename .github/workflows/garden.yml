@@ -1,0 +1,33 @@
+name: Flow garden smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  garden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out Flow toolchain
+        uses: actions/checkout@v4
+        with:
+          repository: flooooooooooow/flow
+          path: flow-sdk
+          persist-credentials: false
+      - name: Compile garden with Flow
+        run: |
+          ./flow-sdk/flow compile src/garden.flow
+      - name: Record deterministic headless garden
+        run: |
+          ./flow-sdk/flow record src/garden.flow --frames 35 --out /tmp/flow-garden-frames
+      - name: Upload recorded frames
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-garden-frames
+          path: /tmp/flow-garden-frames/
+          if-no-files-found: error
