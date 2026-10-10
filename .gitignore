@@ -1,0 +1,7 @@
+build/
+.flow/
+*.o
+*.dSYM/
+*.gif
+*.png
+.DS_Store
