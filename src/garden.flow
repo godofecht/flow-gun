@@ -159,8 +159,8 @@ function plant_fitness(kind: i32, wet: f32, food: f32,
     let branching: f32 = gene_value(ga, gb, 16)
     let resource_cost: f32 = 1.04 - 0.17 * stature - 0.12 * branching
     let light_gain: f32 = 0.88 + 0.20 * stature * sunlight
-    let match: f32 = clamp01(1.0 - slope * abs32(wet - optimum))
-    return clamp01(match * shade_response * light_gain *
+    let suitability: f32 = clamp01(1.0 - slope * abs32(wet - optimum))
+    return clamp01(suitability * shade_response * light_gain *
                    resource_cost * (0.18 + 0.82 * clamp01(food)))
 }
 
