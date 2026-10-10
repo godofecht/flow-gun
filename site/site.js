@@ -16,6 +16,7 @@ let in3D = false;
 let walking = false;
 let ready = false;
 let loadVersion = 0;
+let sampledFps = null;
 
 function syncControls() {
   dimension?.setAttribute("aria-pressed", String(in3D));
@@ -30,7 +31,9 @@ function syncControls() {
   }
   if (reset) reset.disabled = !ready || !in3D;
   if (status) {
-    status.textContent = ready ? "● FLOW ENGINE READY" : "○ LOADING FLOW ENGINE…";
+    status.textContent = ready
+      ? (sampledFps === null ? "● FLOW ENGINE READY" : `● FLOW ENGINE · ${sampledFps} FPS`)
+      : "○ LOADING FLOW ENGINE…";
     status.dataset.ready = String(ready);
   }
 }
@@ -57,12 +60,26 @@ function sendFlowKey(code, key) {
   return true;
 }
 
+// Actual WebAssembly frame counter, not an estimated browser refresh rate.
+function measureFps(version, beforeFrames, beforeTime) {
+  window.setTimeout(() => {
+    if (version !== loadVersion || !ready) return;
+    const current = getEngine()?.flowGfx?.frames;
+    if (typeof current !== "number") return;
+    const now = performance.now();
+    sampledFps = Math.max(0, Math.round((current - beforeFrames) * 1000 / (now - beforeTime)));
+    syncControls();
+    measureFps(version, current, now);
+  }, 1000);
+}
+
 function monitorReady(version, attempt) {
   if (version !== loadVersion) return;
   const win = getEngine();
   if (win && win.flowGfx.frames > 0) {
     ready = true;
     syncControls();
+    measureFps(version, win.flowGfx.frames, performance.now());
   } else if (attempt < 240) {
     window.setTimeout(() => monitorReady(version, attempt + 1), 150);
   } else if (status) {
@@ -85,6 +102,7 @@ function awaitStart() {
   ready = false;
   in3D = false;
   walking = false;
+  sampledFps = null;
   const version = ++loadVersion;
   syncControls();
   try {
