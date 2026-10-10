@@ -22,6 +22,10 @@ const KEY_V: i32 = 9
 const KEY_Z: i32 = 6
 const KEY_X: i32 = 7
 const KEY_C: i32 = 8
+const KEY_F: i32 = 3
+const KEY_Q: i32 = 12
+const KEY_E: i32 = 14
+const KEY_SPACE: i32 = 49
 
 const SCENE_W: i32 = 512
 const SCENE_H: i32 = 480
@@ -525,27 +529,28 @@ function terrain_colour3d(terrain: i32, damp: f32) -> V3 {
     return v3(0.22, 0.36 + 0.15 * damp, 0.21)
 }
 
-# Mesh vertices are shared, limiting the ground to 4225 vertices/8192 tris.
-# This is built only after a new landscape is seeded, not every frame.
+# Low-cost surface: 1089 vertices / 2048 triangles (75% fewer triangles).
+# Plant ecology stays at the original 4096-cell resolution.
 function build_garden_surface(ground: ptr<i32>, wet: ptr<f32>) -> void {
     r3d_mesh_reset()
-    for cy in 0 to 65 {
-        for cx in 0 to 65 {
-            let sx: i32 = if cx < 64 { cx } else { 63 }
-            let sy: i32 = if cy < 64 { cy } else { 63 }
+    for cy in 0 to 33 {
+        for cx in 0 to 33 {
+            let sx: i32 = if cx < 32 { cx * 2 } else { 63 }
+            let sy: i32 = if cy < 32 { cy * 2 } else { 63 }
             let i: i32 = sy * MAP + sx
             let t: i32 = ground[i]
             let height: f32 = soil_height(sx, sy, t)
-            let p: V3 = v3((cx as f32) - 32.0, height, (cy as f32) - 32.0)
+            let p: V3 = v3((cx as f32) * 2.0 - 32.0, height,
+                           (cy as f32) * 2.0 - 32.0)
             let col: V3 = terrain_colour3d(t, wet[i])
             let n: i32 = r3d_mesh_vertex(p, v3(0.0, 1.0, 0.0), col)
         }
     }
-    for cy in 0 to 64 {
-        for cx in 0 to 64 {
-            let a: i32 = cy * 65 + cx
+    for cy in 0 to 32 {
+        for cx in 0 to 32 {
+            let a: i32 = cy * 33 + cx
             let b: i32 = a + 1
-            let d: i32 = a + 65
+            let d: i32 = a + 33
             let e: i32 = d + 1
             let ta: bool = r3d_mesh_tri(a, d, b)
             let tb: bool = r3d_mesh_tri(b, d, e)
@@ -557,7 +562,8 @@ function build_garden_surface(ground: ptr<i32>, wet: ptr<f32>) -> void {
 # No independent JS world or copied vegetation layout exists.
 function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                          wet: ptr<f32>, ground: ptr<i32>,
-                         eye_x: f32, eye_z: f32) -> void {
+                         eye_x: f32, eye_z: f32,
+                         forward_x: f32, forward_z: f32, orbit: bool) -> void {
     for cy in 0 to MAP {
         for cx in 0 to MAP {
             let i: i32 = cy * MAP + cx
@@ -567,7 +573,11 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                 let fz: f32 = (cy as f32) - 31.5
                 let dx: f32 = fx - eye_x
                 let dz: f32 = fz - eye_z
-                if dx * dx + dz * dz < 52.0 * 52.0 {
+                # Cull distant and behind-camera organisms before rasterization.
+                let dist2: f32 = dx * dx + dz * dz
+                let in_front: bool = orbit or dx * forward_x + dz * forward_z > -3.0
+                if dist2 < 60.0 * 60.0 and in_front {
+                    let far: bool = dist2 > 29.0 * 29.0
                     let jitter: u32 = hash_xy(cx, cy)
                     let bx: f32 = fx + (((jitter % 10) as f32) - 5.0) * 0.045
                     let bz: f32 = fz + ((((jitter >> 7) % 10) as f32) - 5.0) * 0.045
@@ -597,13 +607,13 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                         r3d_line3(vp, foot, crown, v3(0.32, 0.28, 0.15))
                     }
                     r3d_sprite(vp, crown, radius, leaf)
-                    if kind == 3 {
+                    if kind == 3 and !far {
                         r3d_sprite(vp, v3(bx - 0.26, h + tall * 0.65, bz),
                                    radius * 0.6, v3(0.28, 0.62, 0.34))
                         r3d_sprite(vp, v3(bx + 0.26, h + tall * 0.65, bz),
                                    radius * 0.6, v3(0.20, 0.58, 0.28))
                     }
-                    if kind == 4 {
+                    if kind == 4 and !far {
                         r3d_sprite(vp, v3(bx - radius * 0.6, h + tall * 0.72, bz),
                                    radius * 0.68, v3(0.20, 0.49, 0.25))
                         r3d_sprite(vp, v3(bx + radius * 0.4, h + tall * 0.74, bz),
@@ -614,8 +624,10 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                         if jitter % 3 == 1 { petal = v3(0.68, 0.52, 0.89) }
                         if jitter % 3 == 2 { petal = v3(0.96, 0.77, 0.36) }
                         r3d_sprite(vp, v3(bx, h + tall + 0.08, bz), radius * 0.70, petal)
-                        r3d_sprite(vp, v3(bx, h + tall + 0.09, bz),
-                                   radius * 0.26, v3(1.0, 0.86, 0.29))
+                        if !far {
+                            r3d_sprite(vp, v3(bx, h + tall + 0.09, bz),
+                                       radius * 0.26, v3(1.0, 0.86, 0.29))
+                        }
                     }
                 }
             }
