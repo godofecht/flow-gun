@@ -192,10 +192,6 @@ const KEY_I: i32 = 34
 const KEY_J: i32 = 38
 const KEY_K: i32 = 40
 const KEY_L: i32 = 37
-const KEY_LEFT: i32 = 123
-const KEY_RIGHT: i32 = 124
-const KEY_UP: i32 = 126
-const KEY_DOWN: i32 = 125
 extern {
     function sinf(x: f32) -> f32
     function cosf(x: f32) -> f32
