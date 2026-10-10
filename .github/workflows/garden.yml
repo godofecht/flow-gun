@@ -36,7 +36,7 @@ jobs:
           # viewport must now come from camera movement and rendering.
           def viewport_digest(path):
               data = path.read_bytes()
-              head, width, height, pixels = data.split(b"\\n", 3)
+              head, width, height, pixels = data.split(bytes([10]), 3)
               assert head == b"P6" and width == b"742 660" and height == b"255"
               # Exclude all changing UI and the separate 2D minimap.
               scene = b"".join(pixels[(y*742+20)*3:(y*742+532)*3]
