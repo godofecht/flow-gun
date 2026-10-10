@@ -96,30 +96,72 @@ function ground_at(x: i32, y: i32) -> i32 {
     return 0
 }
 
-function plant_fitness(kind: i32, wet: f32, food: f32,
-                       sunlight: f32) -> f32 {
-    let mut suitability: f32 = 0.0
-    if kind == 1 {
-        # Clover: thrives in disturbed, average-moisture soil.
-        suitability = 1.0 - 1.4 * abs32(wet - 0.49)
-        suitability = suitability * (0.75 + 0.25 * sunlight)
+# Four linked 8-bit loci in each of two homologous chromosomes.
+# locus 0: water optimum, 1: internode/stature, 2: branching/seed allocation,
+# locus 3: floral pigment. Diploid alleles undergo segregation and mutation.
+# This is a compact explicit genotype-to-phenotype model, not molecular DNA.
+function gene_value(a: u32, b: u32, shift: i32) -> f32 {
+    let allele_a: u32 = (a >> shift) & (255 as u32)
+    let allele_b: u32 = (b >> shift) & (255 as u32)
+    return ((allele_a + allele_b) as f32) / 510.0
+}
+
+function founder_chromosome() -> u32 {
+    let mut chromosome: u32 = 0
+    for locus in 0 to 4 {
+        chromosome = chromosome | (((next_random() >> 8) & (255 as u32)) << (locus * 8))
     }
+    return chromosome
+}
+
+# Each child inherits one recombined gamete from each parent. Small,
+# rare per-locus mutations introduce novel heritable variation.
+function gamete_from(a: u32, b: u32) -> u32 {
+    let mut gamete: u32 = 0
+    for locus in 0 to 4 {
+        let shift: i32 = locus * 8
+        let inherited: u32 = if random_below(2) == 0 { a } else { b }
+        let mut allele: i32 = ((inherited >> shift) & (255 as u32)) as i32
+        if random_below(180) == 0 {
+            allele = allele + random_below(41) - 20
+        }
+        if allele < 0 { allele = 0 }
+        if allele > 255 { allele = 255 }
+        gamete = gamete | ((allele as u32) << shift)
+    }
+    return gamete
+}
+
+function plant_fitness(kind: i32, wet: f32, food: f32,
+                       sunlight: f32, ga: u32, gb: u32) -> f32 {
+    let mut optimum: f32 = 0.49
+    let mut slope: f32 = 1.4
+    let mut shade_response: f32 = 0.75 + 0.25 * sunlight
     if kind == 2 {
-        # Wildflowers: need sunlight to flower and reproduce.
-        suitability = 1.0 - 1.9 * abs32(wet - 0.55)
-        suitability = suitability * (0.18 + 0.82 * sunlight)
+        optimum = 0.55
+        slope = 1.9
+        shade_response = 0.18 + 0.82 * sunlight
     }
     if kind == 3 {
-        # Ferns: damp shade, poor in exposed dry beds.
-        suitability = 1.0 - 1.9 * abs32(wet - 0.77)
-        suitability = suitability * (1.08 - 0.35 * sunlight)
+        optimum = 0.77
+        slope = 1.9
+        shade_response = 1.08 - 0.35 * sunlight
     }
     if kind == 4 {
-        # Shrubs: tolerant of low moisture, but slow to colonise.
-        suitability = 1.0 - 1.5 * abs32(wet - 0.37)
-        suitability = suitability * (0.60 + 0.40 * sunlight)
+        optimum = 0.37
+        slope = 1.5
+        shade_response = 0.60 + 0.40 * sunlight
     }
-    return clamp01(suitability) * (0.18 + 0.82 * clamp01(food))
+    # Genotypes vary within a species. Larger canopies intercept more
+    # light but demand nutrients; branchy plants trade leaves for seeds.
+    optimum = clamp01(optimum + (gene_value(ga, gb, 0) - 0.5) * 0.28)
+    let stature: f32 = gene_value(ga, gb, 8)
+    let branching: f32 = gene_value(ga, gb, 16)
+    let resource_cost: f32 = 1.04 - 0.17 * stature - 0.12 * branching
+    let light_gain: f32 = 0.88 + 0.20 * stature * sunlight
+    let match: f32 = clamp01(1.0 - slope * abs32(wet - optimum))
+    return clamp01(match * shade_response * light_gain *
+                   resource_cost * (0.18 + 0.82 * clamp01(food)))
 }
 
 function neighbouring_shrubs(plants: ptr<i32>, i: i32,
@@ -134,7 +176,8 @@ function neighbouring_shrubs(plants: ptr<i32>, i: i32,
 }
 
 function reset_world(seed: u32, ground: ptr<i32>, wet: ptr<f32>,
-                     food: ptr<f32>, plant: ptr<i32>, age: ptr<i32>) -> void {
+                     food: ptr<f32>, plant: ptr<i32>, age: ptr<i32>,
+                     genes_a: ptr<u32>, genes_b: ptr<u32>) -> void {
     rng_state = seed
     epoch = 0
     for y in 0 to MAP {
@@ -150,6 +193,8 @@ function reset_world(seed: u32, ground: ptr<i32>, wet: ptr<f32>,
             food[i] = 0.56 + 0.32 * grain
             plant[i] = 0
             age[i] = 0
+            genes_a[i] = 0
+            genes_b[i] = 0
             if ground[i] == 1 { wet[i] = 1.0 }
         }
     }
@@ -161,9 +206,13 @@ function reset_world(seed: u32, ground: ptr<i32>, wet: ptr<f32>,
         if ground[i] == 0 {
             let kind: i32 = 1 + random_below(4)
             let light: f32 = 0.63 + 0.28 * ((x as f32) / 64.0)
-            if plant_fitness(kind, wet[i], food[i], light) > 0.21 {
+            let a: u32 = founder_chromosome()
+            let b: u32 = founder_chromosome()
+            if plant_fitness(kind, wet[i], food[i], light, a, b) > 0.21 {
                 plant[i] = kind
                 age[i] = 1 + random_below(4)
+                genes_a[i] = a
+                genes_b[i] = b
             }
         }
     }
@@ -176,6 +225,8 @@ function step_world(ground: ptr<i32>,
                     food: ptr<f32>, food_next: ptr<f32>,
                     plant: ptr<i32>, plant_next: ptr<i32>,
                     age: ptr<i32>, age_next: ptr<i32>,
+                    genes_a: ptr<u32>, genes_b: ptr<u32>,
+                    genes_a_next: ptr<u32>, genes_b_next: ptr<u32>,
                     weather: i32) -> void {
     for y in 0 to MAP {
         for x in 0 to MAP {
@@ -201,6 +252,8 @@ function step_world(ground: ptr<i32>,
                           decay)
             plant_next[i] = 0
             age_next[i] = 0
+            genes_a_next[i] = 0
+            genes_b_next[i] = 0
 
             if ground[i] == 0 {
                 let bushes: i32 = neighbouring_shrubs(plant, i, l, r, u, d)
@@ -208,7 +261,8 @@ function step_world(ground: ptr<i32>,
                                          (1.0 - 0.14 * (bushes as f32)))
                 let old: i32 = plant[i]
                 if old > 0 {
-                    let fit: f32 = plant_fitness(old, wet[i], food[i], light)
+                    let fit: f32 = plant_fitness(old, wet[i], food[i], light,
+                                                       genes_a[i], genes_b[i])
                     let mut danger: f32 = 0.0008
                     if fit < 0.18 { danger = danger + 0.12 }
                     if fit < 0.36 { danger = danger + 0.018 }
@@ -216,6 +270,8 @@ function step_world(ground: ptr<i32>,
                     if random_unit() >= danger {
                         plant_next[i] = old
                         age_next[i] = age[i] + 1
+                        genes_a_next[i] = genes_a[i]
+                        genes_b_next[i] = genes_b[i]
                     } else {
                         # Litter recycles into soil; future life may use it.
                         food_next[i] = clamp01(food_next[i] + 0.12)
@@ -230,22 +286,51 @@ function step_world(ground: ptr<i32>,
                     if direction == 3 { source = d }
                     let parent: i32 = plant[source]
                     if parent > 0 and source != i {
-                        let fit: f32 = plant_fitness(parent, wet[i], food[i], light)
+                        let fit: f32 = plant_fitness(parent, wet[i], food[i],
+                                                     light, genes_a[source],
+                                                     genes_b[source])
+                        let allocation: f32 = gene_value(genes_a[source],
+                                                          genes_b[source], 16)
+                        let stature: f32 = gene_value(genes_a[source],
+                                                       genes_b[source], 8)
                         let mut spread: f32 = 0.36
                         if parent == 2 { spread = 0.28 }
                         if parent == 3 { spread = 0.24 }
                         if parent == 4 { spread = 0.11 }
-                        if random_unit() < spread * fit {
+                        # Mature parents reproduce; reproductive allocation
+                        # boosts offspring production at a growth cost.
+                        let mature: i32 = if parent == 4 { 11 } else { 5 }
+                        if age[source] >= mature and
+                           random_unit() < spread * fit *
+                                           (0.55 + 0.95 * allocation) *
+                                           (1.10 - 0.28 * stature) {
+                            # Same-species neighbouring pollen donor, otherwise
+                            # self-fertilisation. Only conspecifics can mate.
+                            let donor_try: i32 = random_below(4)
+                            let mut donor: i32 = source
+                            if donor_try == 0 and plant[l] == parent { donor = l }
+                            if donor_try == 1 and plant[r] == parent { donor = r }
+                            if donor_try == 2 and plant[u] == parent { donor = u }
+                            if donor_try == 3 and plant[d] == parent { donor = d }
                             plant_next[i] = parent
                             age_next[i] = 1
+                            genes_a_next[i] = gamete_from(genes_a[source],
+                                                           genes_b[source])
+                            genes_b_next[i] = gamete_from(genes_a[donor],
+                                                           genes_b[donor])
                         }
                     } else {
-                        # Rare seed-bank recruitment prevents permanent stasis.
+                        # Low background seed-bank migration retains diversity.
                         if random_unit() < 0.00013 {
                             let candidate: i32 = 1 + random_below(4)
-                            if plant_fitness(candidate, wet[i], food[i], light) > 0.32 {
+                            let a: u32 = founder_chromosome()
+                            let b: u32 = founder_chromosome()
+                            if plant_fitness(candidate, wet[i], food[i],
+                                             light, a, b) > 0.32 {
                                 plant_next[i] = candidate
                                 age_next[i] = 1
+                                genes_a_next[i] = a
+                                genes_b_next[i] = b
                             }
                         }
                     }
@@ -259,6 +344,8 @@ function step_world(ground: ptr<i32>,
         food[i] = food_next[i]
         plant[i] = plant_next[i]
         age[i] = age_next[i]
+        genes_a[i] = genes_a_next[i]
+        genes_b[i] = genes_b_next[i]
     }
     epoch = epoch + 1
 }
