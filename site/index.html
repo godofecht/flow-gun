@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101c16">
+  <meta name="description" content="A living little world. Plant, nurture and perturb an emergent garden — simulated in Flow and running in WebAssembly.">
+  <meta property="og:title" content="Flow Garden — a living little world">
+  <meta property="og:description" content="Plant it. Change the climate. Watch the garden find its own form. 100% Flow → WebAssembly.">
+  <title>Flow Garden — A Living Little World</title>
+  <link rel="icon" href="./flower.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#experience">Skip to interactive garden</a>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="topline" aria-hidden="true"></div>
+  <header class="masthead wrap">
+    <a class="wordmark" href="#top" aria-label="Flow Garden home"><span class="mark" aria-hidden="true">✳</span><span>FLOW<span class="separator"> / </span>GARDEN</span></a>
+    <nav aria-label="Main navigation">
+      <a href="#experience">Explore</a>
+      <a href="#ecology">Ecology</a>
+      <a href="#under-the-hood">How it works</a>
+      <a class="source-link" href="https://github.com/godofecht/flow-gun" target="_blank" rel="noopener noreferrer">Source code <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-text">
+        <div class="eyebrow"><span class="dot"></span> AN EXPERIMENT IN EMERGENCE <span class="hero-num">Nº 001 — FLOW</span></div>
+        <h1 id="hero-title">A living<br><em>little world.</em></h1>
+        <p class="lead">Not drawn. <strong>Grown.</strong> A miniature garden where life takes shape through soil, water, sunlight, and a thousand tiny decisions.</p>
+        <div class="hero-actions"><a class="cta" href="#experience">Enter the garden <span aria-hidden="true">↘</span></a><a class="quiet-link" href="#under-the-hood">Explore the science <span aria-hidden="true">→</span></a></div>
+        <div class="hero-foot"><span>04 SPECIES</span><span>4,096 CELLS</span><span>∞ POSSIBLE GARDENS</span></div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <span class="orbit orbit-a"></span><span class="orbit orbit-b"></span><span class="orbit orbit-c"></span>
+        <div class="flower flower-one"><span></span><span></span><span></span><span></span><span class="center"></span></div>
+        <div class="flower flower-two"><span></span><span></span><span></span><span></span><span class="center"></span></div>
+        <div class="flower flower-three"><span></span><span></span><span></span><span></span><span class="center"></span></div>
+        <div class="leaf leaf-one"></div><div class="leaf leaf-two"></div><div class="leaf leaf-three"></div>
+        <div class="floating-label upper">CELLULAR ECOLOGY / 01</div>
+        <div class="floating-label lower">LOCAL RULES → GLOBAL FORM</div>
+      </div>
+    </section>
+
+    <section class="experience" id="experience" aria-labelledby="garden-title">
+      <div class="wrap">
+        <div class="section-label"><span class="section-marker">01</span><span>YOUR WORLD, IN MOTION</span><span class="hairline"></span><span class="live"><span class="dot"></span> LIVE WEBASSEMBLY</span></div>
+        <div class="experience-head"><div><h2 id="garden-title">Make something <em>grow.</em></h2><p>Everything below is rendered by the original Flow program, compiled to WebAssembly — no JavaScript simulation substitute.</p></div><a class="outline-link" href="./garden/index.html" target="_blank" rel="noopener noreferrer">Open fullscreen ↗</a></div>
+        <div class="playground">
+          <div class="frame-top"><span class="window-dot red"></span><span class="window-dot amber"></span><span class="window-dot green"></span><span class="window-title">flow-garden / living-system.flow</span><span class="wasm-badge">FLOW → WASM</span></div>
+          <div class="game-area">
+            <iframe id="garden-frame" src="./garden/index.html" title="Interactive Flow Garden — click Start in the frame, then plant with the mouse or change weather using the keyboard" loading="eager" allow="fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+          </div>
+          <div class="frame-bottom"><span><span class="dot"></span> SELF-ORGANISING ECOSYSTEM</span><button id="restart" type="button" aria-label="Reload the garden simulation">↻ &nbsp; Restart simulation</button></div>
+        </div>
+        <p class="play-hint"><strong>First time?</strong> Click the start button inside the garden. On desktop, use the keyboard while the garden has focus. Plant by clicking the soil.</p>
+        <div class="controls" aria-label="Garden controls">
+          <div><span class="key">1—4</span><span>Choose species</span></div>
+          <div><span class="key mouse">◉</span><span>Plant / erase with mouse</span></div>
+          <div><span class="key">W</span><span>Rain</span></div>
+          <div><span class="key">S</span><span>Temperate</span></div>
+          <div><span class="key">D</span><span>Drought</span></div>
+          <div><span class="key">P</span><span>Pause</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ecology wrap" id="ecology" aria-labelledby="species-title">
+      <div class="section-label"><span class="section-marker">02</span><span>MEET THE RESIDENTS</span><span class="hairline"></span></div>
+      <div class="section-lead"><h2 id="species-title">Four species.<br><em>Infinite negotiations.</em></h2><p>Every plant is trying to survive on the same patch of earth. Each thrives under different conditions. Nobody tells the garden what to look like.</p></div>
+      <div class="species-grid">
+        <article class="species-card clover"><div class="species-icon" aria-hidden="true">✤</div><div class="spec-num">01 / GROUND COVER</div><h3>Clover</h3><p>Fast-spreading and opportunistic. Claims moderate, open ground before its neighbours can.</p><div class="trait"><span>SPREAD</span><span class="meter"><i style="width:92%"></i></span><span>HIGH</span></div></article>
+        <article class="species-card bloom"><div class="species-icon" aria-hidden="true">✿</div><div class="spec-num">02 / FLOWERING</div><h3>Wildflowers</h3><p>Follow the light and turn flourishing growth into a colourful canopy of pink, violet, and gold.</p><div class="trait"><span>LIGHT</span><span class="meter"><i style="width:86%"></i></span><span>HIGH</span></div></article>
+        <article class="species-card fern"><div class="species-icon" aria-hidden="true">❧</div><div class="spec-num">03 / UNDERSTORY</div><h3>Ferns</h3><p>Prefer damp, sheltered ground. Flourish at the margins where sunlight is scarce.</p><div class="trait"><span>MOISTURE</span><span class="meter"><i style="width:95%"></i></span><span>HIGH</span></div></article>
+        <article class="species-card shrub"><div class="species-icon" aria-hidden="true">♣</div><div class="spec-num">04 / CANOPY</div><h3>Shrubs</h3><p>Slow to spread, but enduring. Their shade changes the opportunities for nearby life.</p><div class="trait"><span>RESILIENCE</span><span class="meter"><i style="width:87%"></i></span><span>HIGH</span></div></article>
+      </div>
+    </section>
+
+    <section class="science" id="under-the-hood" aria-labelledby="science-title"><div class="wrap science-inner">
+      <div><div class="section-label"><span class="section-marker">03</span><span>THE SYSTEM BENEATH</span></div><h2 id="science-title">Complexity from<br><em>simple rules.</em></h2><p>Each cell receives nutrients, moisture, and sunlight. Neighbours compete for space. Plants grow, reproduce, shade, wither, and return their resources to the earth.</p><p>From just these local interactions, the landscape assembles its own mosaics and borders. The garden has no prescribed final appearance.</p><a class="cta cta-light" href="https://github.com/godofecht/flow-gun/blob/main/src/garden.flow" target="_blank" rel="noopener noreferrer">Read the Flow source <span aria-hidden="true">↗</span></a></div>
+      <div class="science-panel"><div class="formula-title">THE GARDEN'S MEMORY</div><div class="formula">world<sub>t+1</sub> = <span>ƒ</span> (world<sub>t</sub>, climate, neighbours)</div><div class="step"><span>01</span><p><strong>Diffuse.</strong> Water and nutrients move through the soil.</p></div><div class="step"><span>02</span><p><strong>Compete.</strong> Each species responds to its own ecological niche.</p></div><div class="step"><span>03</span><p><strong>Transform.</strong> Life spreads, adapts, and recycles its resources.</p></div><div class="science-bottom">ONE MODEL &nbsp;·&nbsp; THOUSANDS OF LOCAL DECISIONS</div></div>
+    </div></section>
+
+    <section class="closing wrap"><div class="closing-flower" aria-hidden="true">✳</div><span class="eyebrow">BUILD A WORLD. WATCH IT BECOME.</span><h2>It starts<br>with <em>one seed.</em></h2><a class="cta" href="#experience">Grow your garden <span aria-hidden="true">↗</span></a></section>
+  </main>
+  <footer class="footer"><div class="wrap"><span class="wordmark"><span class="mark">✳</span> FLOW / GARDEN</span><span>MADE WITH <a href="https://github.com/flooooooooooow/flow">FLOW</a> · SOURCE ON <a href="https://github.com/godofecht/flow-gun">GITHUB</a></span><a href="#top">BACK TO TOP ↑</a></div></footer>
+</body>
+</html>
