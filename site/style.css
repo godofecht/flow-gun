@@ -47,19 +47,19 @@ h1 em,h2 em{font-weight:400;color:#5b8968}
 .orbit-a{width:94%;height:94%;transform:rotate(29deg)}
 .orbit-b{width:76%;height:76%}
 .orbit-c{width:56%;height:56%}
-.flower{position:absolute;width:180px;height:180px;filter:drop-shadow(0 16px 24px rgba(37,73,44,.14));animation:bob 7s ease-in-out infinite}
+.flower{position:absolute;width:180px;height:180px;filter:drop-shadow(0 16px 24px rgba(37,73,44,.14));animation:none}
 .flower span:not(.center){position:absolute;width:47%;height:47%;background:#f2b3aa;border-radius:56% 56% 50% 50%;left:26.5%;top:3%;transform-origin:50% 100%}
 .flower span:nth-child(2){transform:rotate(90deg);background:#f2b9b1}
 .flower span:nth-child(3){transform:rotate(180deg);background:#eeb0a7}
 .flower span:nth-child(4){transform:rotate(270deg);background:#f5bfb5}
 .flower .center{position:absolute;background:#c99848;width:23%;height:23%;border:7px solid #e9c06e;border-radius:50%;inset:38.5%}
 .flower-one{left:38%;top:24%;transform:rotate(-18deg)}
-.flower-two{width:110px;height:110px;left:8%;top:44%;transform:rotate(33deg);animation-delay:-3s}
+.flower-two{width:110px;height:110px;left:8%;top:44%;transform:rotate(33deg);animation:none}
 .flower-two span:not(.center){background:#b7b0dc}
 .flower-two span:nth-child(2){background:#a9a5d7}
 .flower-two span:nth-child(3){background:#c6bee6}
 .flower-two span:nth-child(4){background:#9998c5}
-.flower-three{width:97px;height:97px;right:5%;bottom:10%;transform:rotate(14deg);animation-delay:-4s}
+.flower-three{width:97px;height:97px;right:5%;bottom:10%;transform:rotate(14deg);animation:none}
 .flower-three span:not(.center){background:#e7c37e}
 .flower-three span:nth-child(2){background:#dabc74}
 .flower-three span:nth-child(3){background:#efcf8a}
@@ -71,7 +71,7 @@ h1 em,h2 em{font-weight:400;color:#5b8968}
 .floating-label{position:absolute;color:#557960;font-size:9px}
 .floating-label.upper{right:0;top:16%}
 .floating-label.lower{left:4%;bottom:3%}
-@keyframes bob{50%{translate:0 -10px}}
+
 .experience{background:var(--deep);color:#ecf0e6;padding:88px 0 100px}
 .section-label{display:flex;align-items:center;gap:16px;color:#a0b4a0}
 .section-marker{font-size:12px;border:1px solid currentColor;width:32px;height:32px;display:grid;place-items:center;border-radius:50%;letter-spacing:0}
