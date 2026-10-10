@@ -12,6 +12,53 @@ GitHub Pages is deployed by the [publish workflow](.github/workflows/pages.yml),
 
 After deployment, the public URL is: https://godofecht.github.io/flow-gun/
 
+## Full-screen evolutionary laboratory
+
+The GitHub Pages interface is a **viewport-height laboratory**, with the
+living WebAssembly canvas at its centre, environmental interventions and
+species brushes on the left, and the evolutionary model on the right.
+The previous long-form landing page has been replaced to minimise scrolling.
+The embedded Flow canvas scales to the available viewport while preserving
+its aspect ratio. The controls compact on narrow displays.
+
+## Heritable genetics and developmental morphology
+
+This is a **heritable evolutionary ecosystem**, not four fixed sprites. Every
+occupied cell carries an explicit *diploid genome*: two homologous 32-bit
+chromosomes with four quantitative 8-bit alleles per chromosome.
+
+| Locus | Organism-level consequence |
+|---|---|
+| 0: hydration optimum | Shifts the moisture optimum determining survival and reproductive success |
+| 1: stature / internodes | Controls height, maturation and growth cost |
+| 2: branching allocation | Controls rosettes, fern pinnae, shrub meristems, seed allocation and nutrient cost |
+| 3: pigment | Determines heritable floral colour morphs (pink, violet, gold) |
+
+Offspring inherit a gamete made from randomly selected maternal alleles at
+each locus, combined with a gamete from a conspecific neighbouring donor
+(where available) or from the same parent (self-fertilisation). Each allele has
+a **1/180 mutation probability** per gamete with a bounded change of
+up to 20 units. Founders arrive through a background seed bank or planting.
+
+Phenotype is a function of **genotype × environment × developmental age**:
+resources and maturity regulate vigour; genomes regulate internode growth,
+leaf and branch morphology, reproductive allocation, and petal pigments.
+Selection therefore acts on *heritable differences* in a shared habitat.
+
+Both 2D and 3D depict these inherited traits. Near organisms develop detailed
+rosettes, paired fern pinnae, branching woody canopies, and petal whorls, while
+distant individuals reduce to low-cost billboards. The in-game HUD displays
+the current population's mean stature and branch alleles.
+
+**Scientific scope:** This is an educational *evo-devo abstraction*, not
+genome-scale, molecularly faithful, or experimentally calibrated plant biology.
+Loci recombine freely rather than model linkage and crossover. The fern
+alternation-of-generations lifecycle is simplified, and there are no simulated
+molecular hormones, gene-regulatory networks, meiosis stages, or validated
+biomechanical leaf-growth equations. Genetics and genotype-to-phenotype
+causality are implemented rather than depicted decoratively; parameter values
+are illustrative.
+
 ## Optimised 3D navigation
 
 The 3D mode now features smooth frame-time-based movement, a birds-eye **orbit**
@@ -113,7 +160,9 @@ The update is double buffered: all ecological decisions see the **previous** gar
 
 ## Verification
 
-Startup runs 90 simulation ticks twice from the same fixed seed, checks the lattice invariants (no vegetation on stone or water; biological type range; bounded resources; surviving plants), and checks identical state fingerprints. The app aborts before opening its graphics window if either check fails.
+Startup checks allele segregation and bounded mutation in gametes, plus
+genotype-dependent fitness, then runs 90 simulation ticks twice from the same
+fixed seed and checks the lattice invariants (no vegetation on stone or water; biological type range; bounded resources; surviving plants), and checks identical state fingerprints. The app aborts before opening its graphics window if either check fails.
 
 The GitHub workflow is a compile/record smoke test against current Flow main. The startup tests are deterministic invariants, **not** an ecological validation study.
 
