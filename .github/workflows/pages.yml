@@ -18,6 +18,9 @@ concurrency:
 
 jobs:
   build:
+    permissions:
+      contents: read
+      pages: write
     outputs:
       pages_ready: ${{ steps.pages-config.outcome == 'success' }}
     runs-on: ubuntu-latest
@@ -54,6 +57,13 @@ jobs:
           name: flow-garden-site
           path: dist/
           include-hidden-files: true
+      - name: Prefer Actions build source over branch-based Jekyll
+        id: source-mode
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
       - name: Configure GitHub Pages
         id: pages-config
         continue-on-error: true
