@@ -397,7 +397,8 @@ function draw_square(fb: ptr<u8>, x: i32, y: i32, w: i32,
 }
 
 function draw_tile(fb: ptr<u8>, x: i32, y: i32, terrain: i32,
-                   species: i32, life: i32, moisture: f32, day: i32) -> void {
+                   species: i32, life: i32, moisture: f32, nutrients: f32,
+                   ga: u32, gb: u32, day: i32) -> void {
     let px: i32 = x * TILE
     let py: i32 = y * TILE
     let h: u32 = hash_xy(x, y)
@@ -433,26 +434,34 @@ function draw_tile(fb: ptr<u8>, x: i32, y: i32, terrain: i32,
         put_pixel(fb, px + 2, py + 6, 96, 114, 70)
     }
     if species == 0 { return }
+    let stature: f32 = gene_value(ga, gb, 8)
+    let branches: f32 = gene_value(ga, gb, 16)
+    let pigment: f32 = gene_value(ga, gb, 24)
+    let vigor: f32 = clamp01(0.35 + 0.4 * nutrients + 0.25 * moisture)
+    let leaf_brightness: i32 = (vigor * 40.0 + stature * 14.0) as i32
 
     if species == 1 {
         # Four clover leaflets emerge from the occupied cell.
-        draw_square(fb, px + 1, py + 1, 3, 80, 151, 72)
-        draw_square(fb, px + 4, py + 1, 3, 101, 174, 87)
-        draw_square(fb, px + 1, py + 4, 3, 65, 139, 72)
-        draw_square(fb, px + 4, py + 4, 3, 94, 169, 80)
+        draw_square(fb, px + 1, py + 1, 3, 62, 120 + leaf_brightness, 65)
+        draw_square(fb, px + 4, py + 1, 3, 74, 142 + leaf_brightness, 74)
+        draw_square(fb, px + 1, py + 4, 3, 58, 113 + leaf_brightness, 67)
+        if branches > 0.27 {
+            draw_square(fb, px + 4, py + 4, 3, 74, 128 + leaf_brightness, 73)
+        }
         put_pixel(fb, px + 3, py + 3, 190, 205, 127)
     }
     if species == 2 {
         # Leaves then a mature flower with a deterministic colour morph.
-        draw_square(fb, px + 1, py + 1, 6, 44, 121, 62)
+        draw_square(fb, px + 1, py + 1, 6, 44, 97 + leaf_brightness, 62)
         put_pixel(fb, px + 1, py + 5, 88, 169, 82)
         put_pixel(fb, px + 6, py + 2, 88, 169, 82)
-        if life >= 12 and moisture > 0.29 {
-            let mut pr: i32 = 235
-            let mut pg: i32 = 133
-            let mut pb: i32 = 171
-            if h % 3 == 1 { pr = 183; pg = 151; pb = 235 }
-            if h % 3 == 2 { pr = 253; pg = 197; pb = 109 }
+        let flowering_age: i32 = 9 + (stature * 8.0) as i32
+        if life >= flowering_age and moisture > 0.29 and nutrients > 0.20 {
+            let mut pr: i32 = 232
+            let mut pg: i32 = 142
+            let mut pb: i32 = 163
+            if pigment < 0.36 { pr = 173; pg = 148; pb = 230 }
+            if pigment > 0.67 { pr = 242; pg = 192; pb = 93 }
             draw_square(fb, px + 3, py + 0, 2, pr, pg, pb)
             draw_square(fb, px + 3, py + 6, 2, pr, pg, pb)
             draw_square(fb, px + 0, py + 3, 2, pr, pg, pb)
@@ -461,9 +470,10 @@ function draw_tile(fb: ptr<u8>, x: i32, y: i32, terrain: i32,
         }
     }
     if species == 3 {
-        # Fern's alternating fronds are a local developmental motif.
-        for k in 1 to 7 {
-            put_pixel(fb, px + 3, py + k, 86, 186, 99)
+        # Fern pinnation and frond fullness respond to developmental stage.
+        let fronds: i32 = 3 + (branches * 4.0) as i32
+        for k in 1 to fronds {
+            put_pixel(fb, px + 3, py + k, 77, 133 + leaf_brightness, 91)
             if k % 2 == 0 {
                 put_pixel(fb, px + 1, py + k - 1, 54, 143, 75)
                 put_pixel(fb, px + 2, py + k, 67, 166, 83)
@@ -475,9 +485,9 @@ function draw_tile(fb: ptr<u8>, x: i32, y: i32, terrain: i32,
     }
     if species == 4 {
         # Shrub crowns become denser as individual cells age.
-        draw_square(fb, px + 1, py + 1, 6, 31, 96, 58)
-        draw_square(fb, px + 2, py + 1, 4, 50, 128, 66)
-        if life > 18 {
+        draw_square(fb, px + 1, py + 1, 6, 30, 83 + leaf_brightness, 56)
+        draw_square(fb, px + 2, py + 1, 4, 45, 101 + leaf_brightness, 64)
+        if life > (13 + (stature * 12.0) as i32) and branches > 0.25 {
             draw_square(fb, px + 1, py + 4, 3, 35, 105, 61)
             draw_square(fb, px + 4, py + 3, 3, 65, 150, 77)
             put_pixel(fb, px + 3, py + 3, 141, 181, 90)
@@ -486,11 +496,13 @@ function draw_tile(fb: ptr<u8>, x: i32, y: i32, terrain: i32,
 }
 
 function draw_garden(g: Gfx, fb: ptr<u8>, ground: ptr<i32>, wet: ptr<f32>,
-                     plant: ptr<i32>, age: ptr<i32>) -> void {
+                     food: ptr<f32>, plant: ptr<i32>, age: ptr<i32>,
+                     genes_a: ptr<u32>, genes_b: ptr<u32>) -> void {
     for y in 0 to MAP {
         for x in 0 to MAP {
             let i: i32 = y * MAP + x
-            draw_tile(fb, x, y, ground[i], plant[i], age[i], wet[i], epoch)
+            draw_tile(fb, x, y, ground[i], plant[i], age[i], wet[i],
+                      food[i], genes_a[i], genes_b[i], epoch)
         }
     }
     gfx_blit_rgb(g, FIELD_X, FIELD_Y, 512, 512, fb)
@@ -1136,7 +1148,7 @@ function main() -> i32 {
         } else {
             # Planting or resetting from 2D must invalidate 3D's cached image.
             rendered_epoch = -1
-            draw_garden(g, pixels, ground, wet, plant, age)
+            draw_garden(g, pixels, ground, wet, food, plant, age, genes_a, genes_b)
             gfx_fill_rect(g, FIELD_X + ((cam_x + 32.0) as i32) * TILE,
                           FIELD_Y + ((cam_z + 32.0) as i32) * TILE, TILE, TILE,
                           240, 230, 160)
