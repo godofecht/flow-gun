@@ -21,10 +21,18 @@ jobs:
       - name: Compile, run and verify deterministic headless garden
         run: |
           ./flow-sdk/flow record src/garden.flow --frames 35 --out /tmp/flow-garden-frames
+      - name: Render true 3D in headless recorder
+        env:
+          FLOW_GFX_RECORD_KEYS: '1:48,3-7:13,8-10:124,11:9'
+        run: |
+          ./flow-sdk/flow record src/garden.flow --frames 16 --out /tmp/flow-garden-3d
+          test -n "$(find /tmp/flow-garden-3d -type f -name '*.ppm' -print -quit)"
       - name: Upload recorded frames
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: flow-garden-frames
-          path: /tmp/flow-garden-frames/
+          path: |
+            /tmp/flow-garden-frames/
+            /tmp/flow-garden-3d/
           if-no-files-found: error
