@@ -1,0 +1,8 @@
+[package]
+name = "flow-gun"
+version = "0.1.0"
+description = "A miniature morphogenetic garden in Flow"
+author = "godofecht"
+entry = "src/garden.flow"
+
+[dependencies]
