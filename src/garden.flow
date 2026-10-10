@@ -69,7 +69,7 @@ function ground_at(x: i32, y: i32) -> i32 {
     let dx: i32 = x - 48
     let dy: i32 = y - 14
     let edge: i32 = (hash_xy(x, y) % 7) as i32 - 3
-    if dx * dx * 64 + dy * dy * 144 < 64 * 144 * 64 + edge * 850 {
+    if dx * dx * 64 + dy * dy * 121 < 121 * 64 + edge * 38 {
         return 1
     }
     let centre: i32 = 20 + y / 5 - (y * y) / 300
@@ -498,7 +498,7 @@ function main() -> i32 {
     let pixels: array<u8, 786432> = [0, 0, 0, 0]
 
     # Test invariants and reproducibility before opening a native window.
-    let seed: u32 = 20261010
+    let mut seed: u32 = 20261010
     reset_world(seed, ground, wet, food, plant, age)
     for t in 0 to 90 {
         step_world(ground, wet, wet_next, food, food_next,
