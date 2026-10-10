@@ -739,8 +739,9 @@ function main() -> i32 {
         gfx_close(g)
         return 3
     }
-    r3d_set_cull(R3D_CULL_NONE)
-    r3d_set_ambient(0.43)
+    let heights: array<f32, 4096> = [0.0, 0.0, 0.0, 0.0]
+    r3d_set_cull(R3D_CULL_BACK)
+    r3d_set_ambient(0.46)
     build_garden_surface(ground, wet, heights)
     let projection: array<f32, 16> = [0.0, 0.0, 0.0, 0.0]
     let model: array<f32, 16> = [0.0, 0.0, 0.0, 0.0]
@@ -751,7 +752,6 @@ function main() -> i32 {
     let p_view: ptr<f32> = view
     let p_vp: ptr<f32> = viewproj
     let mini: array<u8, 12288> = [0, 0, 0, 0]
-    let heights: array<f32, 4096> = [0.0, 0.0, 0.0, 0.0]
     # Two navigable cameras observe one ecological state. The 2D pointer,
     # orbit focal point and walk position share these map coordinates.
     let mut show3d: bool = false
