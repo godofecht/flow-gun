@@ -198,8 +198,10 @@ function reset_world(seed: u32, ground: ptr<i32>, wet: ptr<f32>,
             if ground[i] == 1 { wet[i] = 1.0 }
         }
     }
-    # All species begin as scattered seeds, not predetermined silhouettes.
-    for k in 0 to 130 {
+    # Heterogeneous founder cohorts occupy the landscape before the visitor
+    # arrives: seedlings, flowering adults and mature shrubs coexist.
+    # Their genotypes and positions are still seeded stochastically.
+    for k in 0 to 780 {
         let x: i32 = 3 + random_below(MAP - 6)
         let y: i32 = 3 + random_below(MAP - 6)
         let i: i32 = y * MAP + x
@@ -210,7 +212,7 @@ function reset_world(seed: u32, ground: ptr<i32>, wet: ptr<f32>,
             let b: u32 = founder_chromosome()
             if plant_fitness(kind, wet[i], food[i], light, a, b) > 0.21 {
                 plant[i] = kind
-                age[i] = 1 + random_below(4)
+                age[i] = 3 + random_below(34)
                 genes_a[i] = a
                 genes_b[i] = b
             }
@@ -704,8 +706,12 @@ function terrain_colour3d(terrain: i32, damp: f32, cx: i32, cy: i32) -> V3 {
         return v3(0.59 + 0.11 * grain, 0.54 + 0.10 * grain, 0.39 + 0.08 * grain)
     }
     # Stable soil variation adds definition without per-frame textures.
-    let light: f32 = 0.85 + 0.19 * grain
-    return v3(0.22 * light, (0.36 + 0.15 * damp) * light, 0.21 * light)
+    let meadow: f32 = ((hash_xy(cx / 3, cy / 3) % 1000) as f32) / 1000.0
+    let light: f32 = 0.80 + 0.26 * grain + 0.16 * meadow
+    let dry: f32 = 1.0 - damp
+    return v3((0.15 + 0.11 * dry) * light,
+              (0.36 + 0.17 * damp + 0.05 * meadow) * light,
+              (0.12 + 0.08 * meadow) * light)
 }
 
 # Low-cost surface: 1089 vertices / 2048 triangles (75% fewer triangles).
@@ -798,18 +804,18 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                     let mut radius: f32 = (0.20 + 0.22 * branching) * growth
                     let mut leaf: V3 = v3(0.25, 0.56 + 0.15 * vigor, 0.29)
                     if kind == 2 {
-                        tall = (0.66 + 0.90 * stature) * growth
-                        radius = (0.20 + 0.15 * branching) * growth
+                        tall = (0.85 + 1.13 * stature) * growth
+                        radius = (0.29 + 0.21 * branching) * growth
                         leaf = v3(0.19, 0.50 + 0.15 * vigor, 0.25)
                     }
                     if kind == 3 {
-                        tall = (0.46 + 0.65 * stature) * growth
-                        radius = (0.27 + 0.23 * branching) * growth
+                        tall = (0.65 + 0.86 * stature) * growth
+                        radius = (0.35 + 0.34 * branching) * growth
                         leaf = v3(0.12, 0.42 + 0.15 * vigor, 0.21)
                     }
                     if kind == 4 {
-                        tall = (1.04 + 1.53 * stature) * growth
-                        radius = (0.42 + 0.55 * branching) * growth
+                        tall = (1.6 + 2.04 * stature) * growth
+                        radius = (0.57 + 0.75 * branching) * growth
                         leaf = v3(0.11, 0.36 + 0.13 * vigor, 0.18)
                     }
                     let base: V3 = v3(bx, h + 0.035, bz)
@@ -993,7 +999,8 @@ function main() -> i32 {
     }
     let heights: array<f32, 4096> = [0.0, 0.0, 0.0, 0.0]
     r3d_set_cull(R3D_CULL_BACK)
-    r3d_set_ambient(0.46)
+    r3d_set_ambient(0.47)
+    r3d_set_fog(true, v3(0.58, 0.69, 0.64), 33.0, 110.0)
     build_garden_surface(ground, wet, heights)
     let projection: array<f32, 16> = [0.0, 0.0, 0.0, 0.0]
     let model: array<f32, 16> = [0.0, 0.0, 0.0, 0.0]
