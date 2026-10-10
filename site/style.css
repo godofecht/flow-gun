@@ -184,3 +184,10 @@ iframe{width:100%;max-width:790px;height:690px;display:block;border:0;border-rad
 }
 @media(max-width:410px){.species-grid{grid-template-columns:1fr}.species-card p{min-height:0}.controls{grid-template-columns:1fr 1fr}.controls>div{font-size:10px;padding:12px 7px}.hero-num{display:none}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+.dimension-controls{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:20px;color:#b4ccb4;font-size:11px;font-weight:700;letter-spacing:.09em}
+.dimension-controls button{border:1px solid #8ab68c;color:#e5f6dd;background:#345940;padding:13px 18px;border-radius:5px;cursor:pointer;font-weight:700;letter-spacing:.02em;transition:background .15s}
+.dimension-controls button:hover{background:#4b7355}
+.dimension-controls button[aria-pressed="true"]{background:#688d60;color:#fff}
+.dim-key{margin-left:9px;border:1px solid currentColor;padding:3px 6px;border-radius:3px}
+.dim-detail{color:#8fa791;font-size:11px;font-weight:500;letter-spacing:0}
