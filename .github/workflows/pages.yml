@@ -18,6 +18,8 @@ concurrency:
 
 jobs:
   build:
+    outputs:
+      pages_ready: ${{ steps.pages-config.outcome == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -53,15 +55,18 @@ jobs:
           path: dist/
           include-hidden-files: true
       - name: Configure GitHub Pages
+        id: pages-config
+        continue-on-error: true
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
+        if: steps.pages-config.outcome == 'success'
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist/
 
   deploy:
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.build.outputs.pages_ready == 'true'
     runs-on: ubuntu-latest
     permissions:
       pages: write
