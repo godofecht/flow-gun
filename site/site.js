@@ -11,12 +11,21 @@ const dimension = document.getElementById("toggle-dimension");
 const mode = document.getElementById("camera-mode");
 const reset = document.getElementById("camera-reset");
 const status = document.getElementById("garden-runtime");
+const pause = document.getElementById("pause");
+const reseed = document.getElementById("reseed");
+const expand = document.getElementById("fullscreen");
+const stage = document.getElementById("stage-screen");
+const weatherControls = [...document.querySelectorAll("[data-weather]")];
+const speciesControls = [...document.querySelectorAll("[data-species]")];
 
 let in3D = false;
 let walking = false;
 let ready = false;
 let loadVersion = 0;
 let sampledFps = null;
+let paused = false;
+let weather = 0;
+let brush = 2;
 
 function syncControls() {
   dimension?.setAttribute("aria-pressed", String(in3D));
@@ -30,6 +39,20 @@ function syncControls() {
     mode.disabled = !ready;
   }
   if (reset) reset.disabled = !ready || !in3D;
+  if (pause) {
+    pause.disabled = !ready;
+    pause.setAttribute("aria-pressed", String(paused));
+    pause.firstChild.textContent = paused ? "▶ Resume " : "Ⅱ Pause ";
+  }
+  if (reseed) reseed.disabled = !ready;
+  for (const btn of weatherControls) {
+    btn.disabled = !ready;
+    btn.setAttribute("aria-pressed", String(Number(btn.dataset.weather) === weather));
+  }
+  for (const btn of speciesControls) {
+    btn.disabled = !ready;
+    btn.setAttribute("aria-pressed", String(Number(btn.dataset.species) === brush));
+  }
   if (status) {
     status.textContent = ready
       ? (sampledFps === null ? "● FLOW ENGINE READY" : `● FLOW ENGINE · ${sampledFps} FPS`)
@@ -94,6 +117,11 @@ function bindKeyboardChanges(win) {
     if (!event.isTrusted || event.repeat) return;
     if (event.code === "Tab") in3D = !in3D;
     if (event.code === "KeyV" && in3D) walking = !walking;
+    if (event.code === "KeyP") paused = !paused;
+    const climates = in3D ? ["KeyX","KeyZ","KeyC"] : ["KeyS","KeyW","KeyD"];
+    const climateIndex = climates.indexOf(event.code);
+    if (climateIndex >= 0) weather = climateIndex;
+    if (/^Digit[1-4]$/.test(event.code)) brush = Number(event.code.slice(-1));
     syncControls();
   }, true);
 }
@@ -103,6 +131,9 @@ function awaitStart() {
   in3D = false;
   walking = false;
   sampledFps = null;
+  paused = false;
+  weather = 0;
+  brush = 2;
   const version = ++loadVersion;
   syncControls();
   try {
@@ -143,3 +174,48 @@ reset?.addEventListener("click", () => {
 });
 
 syncControls();
+
+for (const btn of weatherControls) {
+  btn.addEventListener("click", () => {
+    const value = Number(btn.dataset.weather);
+    const key = in3D ? ["KeyX","KeyZ","KeyC"][value] : ["KeyS","KeyW","KeyD"][value];
+    if (!sendFlowKey(key, key.slice(-1).toLowerCase())) return;
+    weather = value;
+    syncControls();
+  });
+}
+for (const btn of speciesControls) {
+  btn.addEventListener("click", () => {
+    const value = Number(btn.dataset.species);
+    if (in3D) {
+      if (!sendFlowKey("Tab","Tab")) return;
+      in3D = false;
+    }
+    if (!sendFlowKey("Digit" + value, String(value))) return;
+    brush = value;
+    syncControls();
+  });
+}
+pause?.addEventListener("click", () => {
+  if (!sendFlowKey("KeyP","p")) return;
+  paused = !paused;
+  syncControls();
+});
+reseed?.addEventListener("click", () => {
+  if (!sendFlowKey("KeyR","r")) return;
+  paused = false;
+  // A fresh garden is re-seeded without replacing the WebAssembly process.
+  syncControls();
+});
+expand?.addEventListener("click", async () => {
+  if (!stage) return;
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await stage.requestFullscreen();
+  } catch (error) {
+    frame?.focus();
+  }
+});
+document.addEventListener("fullscreenchange", () => {
+  if (expand) expand.textContent = document.fullscreenElement ? "⤢ Exit" : "⛶ Expand";
+});
