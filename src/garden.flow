@@ -96,7 +96,7 @@ function ground_at(x: i32, y: i32) -> i32 {
     return 0
 }
 
-# Four linked 8-bit loci in each of two homologous chromosomes.
+# Four encoded 8-bit loci in each of two homologous chromosomes.
 # locus 0: water optimum, 1: internode/stature, 2: branching/seed allocation,
 # locus 3: floral pigment. Diploid alleles undergo segregation and mutation.
 # This is a compact explicit genotype-to-phenotype model, not molecular DNA.
@@ -638,6 +638,36 @@ function verify_state(ground: ptr<i32>, plant: ptr<i32>,
     return alive > 0
 }
 
+# Exercise actual allele transmission and selection-relevant phenotypes.
+# Parents differ at all loci; gametes may inherit either allele or a bounded
+# mutation. This property test does not assume any particular random sequence.
+function verify_genotype_mechanics() -> bool {
+    let chromosome_low: u32 = (16 as u32) * (16843009 as u32)
+    let chromosome_high: u32 = (224 as u32) * (16843009 as u32)
+    let low_fit: f32 = plant_fitness(2, 0.41, 0.90, 0.90,
+                                    0 as u32, 0 as u32)
+    let high_fit: f32 = plant_fitness(2, 0.41, 0.90, 0.90,
+                                     (255 as u32) * (16843009 as u32),
+                                     (255 as u32) * (16843009 as u32))
+    if low_fit <= high_fit + 0.08 { return false }
+    let mut inherited_low: i32 = 0
+    let mut inherited_high: i32 = 0
+    for trial in 0 to 150 {
+        let gamete: u32 = gamete_from(chromosome_low, chromosome_high)
+        for locus in 0 to 4 {
+            let shift: i32 = locus * 8
+            let allele: i32 = ((gamete >> shift) & (255 as u32)) as i32
+            if abs32((allele - 16) as f32) > 20.0 and
+               abs32((allele - 224) as f32) > 20.0 {
+                return false
+            }
+            if allele < 100 { inherited_low = inherited_low + 1 }
+            if allele > 100 { inherited_high = inherited_high + 1 }
+        }
+    }
+    return inherited_low > 0 and inherited_high > 0
+}
+
 # Habitat geometry is stable while its living inhabitants change over time.
 # Coordinates: one ecological cell = one metre in X/Z, Y grows upward.
 function soil_height(cx: i32, cy: i32, terrain: i32) -> f32 {
@@ -918,6 +948,12 @@ function main() -> i32 {
     let genes_b_next: array<u32, 4096> = [0, 0, 0, 0]
     let pixels: array<u8, 786432> = [0, 0, 0, 0]
 
+    # Verify diploid inheritance, mutation bounds and genotype selection.
+    if !verify_genotype_mechanics() {
+        println("FAIL: genomic transmission or phenotype differentiation")
+        return 4
+    }
+    println("PASS: diploid segregation, mutation bounds and selection")
     # Test invariants and reproducibility before opening a native window.
     let mut seed: u32 = 20261010
     reset_world(seed, ground, wet, food, plant, age, genes_a, genes_b)
