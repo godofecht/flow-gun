@@ -497,12 +497,16 @@ function draw_tile(fb: ptr<u8>, x: i32, y: i32, terrain: i32,
 
 function draw_garden(g: Gfx, fb: ptr<u8>, ground: ptr<i32>, wet: ptr<f32>,
                      food: ptr<f32>, plant: ptr<i32>, age: ptr<i32>,
-                     genes_a: ptr<u32>, genes_b: ptr<u32>) -> void {
-    for y in 0 to MAP {
-        for x in 0 to MAP {
-            let i: i32 = y * MAP + x
-            draw_tile(fb, x, y, ground[i], plant[i], age[i], wet[i],
-                      food[i], genes_a[i], genes_b[i], epoch)
+                     genes_a: ptr<u32>, genes_b: ptr<u32>, redraw: bool) -> void {
+    # 2D soil and plants only change when ecology advances or the user paints.
+    # Reuse the packed RGB buffer on idle frames, like the 3D framebuffer.
+    if redraw {
+        for y in 0 to MAP {
+            for x in 0 to MAP {
+                let i: i32 = y * MAP + x
+                draw_tile(fb, x, y, ground[i], plant[i], age[i], wet[i],
+                          food[i], genes_a[i], genes_b[i], epoch)
+            }
         }
     }
     gfx_blit_rgb(g, FIELD_X, FIELD_Y, 512, 512, fb)
@@ -972,6 +976,7 @@ function main() -> i32 {
     # In a resting camera the ecology evolves only every third UI frame.
     # Keep the last depth-tested RGB framebuffer, avoiding redundant
     # software triangle/sprite rasterization on all unchanged frames.
+    let mut rendered_2d_epoch: i32 = -1
     let mut rendered_epoch: i32 = -1
     let mut rendered_x: f32 = 10000.0
     let mut rendered_z: f32 = 10000.0
@@ -1132,6 +1137,7 @@ function main() -> i32 {
                 reset_world(seed, ground, wet, food, plant, age, genes_a, genes_b)
                 build_garden_surface(ground, wet, heights)
                 rendered_epoch = -1
+                rendered_2d_epoch = -1
             }
             key_r_held = true
         } else {
@@ -1151,12 +1157,14 @@ function main() -> i32 {
                     age[cell] = 1
                     genes_a[cell] = founder_chromosome()
                     genes_b[cell] = founder_chromosome()
+                    rendered_2d_epoch = -1
                 }
                 if mouse.right != 0 {
                     plant[cell] = 0
                     age[cell] = 0
                     genes_a[cell] = 0
                     genes_b[cell] = 0
+                    rendered_2d_epoch = -1
                 }
             }
         }
@@ -1215,7 +1223,9 @@ function main() -> i32 {
         } else {
             # Planting or resetting from 2D must invalidate 3D's cached image.
             rendered_epoch = -1
-            draw_garden(g, pixels, ground, wet, food, plant, age, genes_a, genes_b)
+            draw_garden(g, pixels, ground, wet, food, plant, age, genes_a, genes_b,
+                        rendered_2d_epoch != epoch)
+            rendered_2d_epoch = epoch
             gfx_fill_rect(g, FIELD_X + ((cam_x + 32.0) as i32) * TILE,
                           FIELD_Y + ((cam_z + 32.0) as i32) * TILE, TILE, TILE,
                           240, 230, 160)
