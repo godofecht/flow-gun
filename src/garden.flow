@@ -523,15 +523,29 @@ function soil_height(cx: i32, cy: i32, terrain: i32) -> f32 {
     return 0.15 + 0.50 * gentle + 0.11 * fine
 }
 
-function terrain_colour3d(terrain: i32, damp: f32) -> V3 {
+function terrain_colour3d(terrain: i32, damp: f32, cx: i32, cy: i32) -> V3 {
     if terrain == 1 { return v3(0.13, 0.38, 0.47) }
-    if terrain == 2 { return v3(0.64, 0.59, 0.44) }
-    return v3(0.22, 0.36 + 0.15 * damp, 0.21)
+    let grain: f32 = ((hash_xy(cx, cy) % 997) as f32) / 997.0
+    if terrain == 2 {
+        return v3(0.59 + 0.11 * grain, 0.54 + 0.10 * grain, 0.39 + 0.08 * grain)
+    }
+    # Stable soil variation adds definition without per-frame textures.
+    let light: f32 = 0.85 + 0.19 * grain
+    return v3(0.22 * light, (0.36 + 0.15 * damp) * light, 0.21 * light)
 }
 
 # Low-cost surface: 1089 vertices / 2048 triangles (75% fewer triangles).
 # Plant ecology stays at the original 4096-cell resolution.
-function build_garden_surface(ground: ptr<i32>, wet: ptr<f32>) -> void {
+function build_garden_surface(ground: ptr<i32>, wet: ptr<f32>,
+                              heights: ptr<f32>) -> void {
+    # Cache the full-resolution terrain before meshing: foliage and
+    # the walking camera can sample it without rehashing every frame.
+    for cy in 0 to MAP {
+        for cx in 0 to MAP {
+            let i: i32 = cy * MAP + cx
+            heights[i] = soil_height(cx, cy, ground[i])
+        }
+    }
     r3d_mesh_reset()
     for cy in 0 to 33 {
         for cx in 0 to 33 {
@@ -539,11 +553,18 @@ function build_garden_surface(ground: ptr<i32>, wet: ptr<f32>) -> void {
             let sy: i32 = if cy < 32 { cy * 2 } else { 63 }
             let i: i32 = sy * MAP + sx
             let t: i32 = ground[i]
-            let height: f32 = soil_height(sx, sy, t)
+            let height: f32 = heights[i]
             let p: V3 = v3((cx as f32) * 2.0 - 32.0, height,
                            (cy as f32) * 2.0 - 32.0)
-            let col: V3 = terrain_colour3d(t, wet[i])
-            let n: i32 = r3d_mesh_vertex(p, v3(0.0, 1.0, 0.0), col)
+            let x0: i32 = if sx >= 2 { sx - 2 } else { 0 }
+            let x1: i32 = if sx < 62 { sx + 2 } else { 63 }
+            let y0: i32 = if sy >= 2 { sy - 2 } else { 0 }
+            let y1: i32 = if sy < 62 { sy + 2 } else { 63 }
+            let slope: V3 = v3(heights[sy * MAP + x0] - heights[sy * MAP + x1],
+                                4.0,
+                                heights[y0 * MAP + sx] - heights[y1 * MAP + sx])
+            let col: V3 = terrain_colour3d(t, wet[i], sx, sy)
+            let n: i32 = r3d_mesh_vertex(p, v3_norm(slope), col)
         }
     }
     for cy in 0 to 32 {
@@ -561,7 +582,7 @@ function build_garden_surface(ground: ptr<i32>, wet: ptr<f32>) -> void {
 # Every shoot is a 3D organism rooted at the exact corresponding 2D cell.
 # No independent JS world or copied vegetation layout exists.
 function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
-                         wet: ptr<f32>, ground: ptr<i32>,
+                         wet: ptr<f32>, heights: ptr<f32>,
                          eye_x: f32, eye_z: f32,
                          forward_x: f32, forward_z: f32, orbit: bool) -> void {
     for cy in 0 to MAP {
@@ -575,13 +596,13 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                 let dz: f32 = fz - eye_z
                 # Cull distant and behind-camera organisms before rasterization.
                 let dist2: f32 = dx * dx + dz * dz
-                let in_front: bool = orbit or dx * forward_x + dz * forward_z > -3.0
+                let in_front: bool = dx * forward_x + dz * forward_z > -3.0
                 if dist2 < 60.0 * 60.0 and in_front {
-                    let far: bool = dist2 > 29.0 * 29.0
+                    let far: bool = dist2 > (if orbit { 43.0 * 43.0 } else { 29.0 * 29.0 })
                     let jitter: u32 = hash_xy(cx, cy)
                     let bx: f32 = fx + (((jitter % 10) as f32) - 5.0) * 0.045
                     let bz: f32 = fz + ((((jitter >> 7) % 10) as f32) - 5.0) * 0.045
-                    let h: f32 = soil_height(cx, cy, ground[i])
+                    let h: f32 = heights[i]
                     let growth: f32 = r3d_clampf((age[i] as f32) / 24.0, 0.25, 1.0)
                     let mut tall: f32 = 0.27 * growth
                     let mut radius: f32 = 0.25 * growth
@@ -637,7 +658,7 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
 
 # 2D top-down map is a projection of the same cells, with an exact camera dot.
 function draw_minimap(g: Gfx, fb: ptr<u8>, ground: ptr<i32>,
-                      plant: ptr<i32>, cam_x: f32, cam_z: f32) -> void {
+                      plant: ptr<i32>, cam_x: f32, cam_z: f32, yaw: f32) -> void {
     for y in 0 to MAP {
         for x in 0 to MAP {
             let i: i32 = y * MAP + x
@@ -661,6 +682,13 @@ function draw_minimap(g: Gfx, fb: ptr<u8>, ground: ptr<i32>,
     let px: i32 = 568 + ((cam_x + 32.0) as i32)
     let py: i32 = 448 + ((cam_z + 32.0) as i32)
     gfx_fill_rect(g, px - 2, py - 2, 5, 5, 244, 244, 218)
+    # A tiny pointer reveals facing direction, not only position.
+    let facing: V3 = r3d_forward(yaw, 0.0)
+    let tip_x: i32 = px + (facing.x * 7.0) as i32
+    let tip_y: i32 = py + (facing.z * 7.0) as i32
+    if tip_x >= 568 and tip_x < 632 and tip_y >= 448 and tip_y < 512 {
+        gfx_fill_rect(g, tip_x, tip_y, 2, 2, 250, 194, 105)
+    }
 }
 
 
@@ -713,7 +741,7 @@ function main() -> i32 {
     }
     r3d_set_cull(R3D_CULL_NONE)
     r3d_set_ambient(0.43)
-    build_garden_surface(ground, wet)
+    build_garden_surface(ground, wet, heights)
     let projection: array<f32, 16> = [0.0, 0.0, 0.0, 0.0]
     let model: array<f32, 16> = [0.0, 0.0, 0.0, 0.0]
     let view: array<f32, 16> = [0.0, 0.0, 0.0, 0.0]
@@ -723,6 +751,7 @@ function main() -> i32 {
     let p_view: ptr<f32> = view
     let p_vp: ptr<f32> = viewproj
     let mini: array<u8, 12288> = [0, 0, 0, 0]
+    let heights: array<f32, 4096> = [0.0, 0.0, 0.0, 0.0]
     # Two navigable cameras observe one ecological state. The 2D pointer,
     # orbit focal point and walk position share these map coordinates.
     let mut show3d: bool = false
@@ -780,9 +809,12 @@ function main() -> i32 {
         v_held = v_now
         let space_now: bool = gfx_key_down(g, KEY_SPACE)
         if space_now and !space_held and show3d {
+            cam_x = 0.0
+            cam_z = 0.0
             yaw = 0.0
-            pitch = if orbit { -0.57 } else { -0.13 }
-            zoom_goal = 27.0
+            pitch = if orbit { -0.72 } else { -0.13 }
+            zoom_goal = 35.0
+            fov = 65.0
             vx = 0.0
             vz = 0.0
         }
@@ -859,12 +891,25 @@ function main() -> i32 {
             let easing: f32 = r3d_clampf(11.0 * dt, 0.0, 1.0)
             vx = vx + (move_x * walk_speed * boost - vx) * easing
             vz = vz + (move_z * walk_speed * boost - vz) * easing
-            cam_x = r3d_clampf(cam_x + vx * dt, -30.5, 30.5)
-            cam_z = r3d_clampf(cam_z + vz * dt, -30.5, 30.5)
+            let next_x: f32 = r3d_clampf(cam_x + vx * dt, -30.5, 30.5)
+            let next_z: f32 = r3d_clampf(cam_z + vz * dt, -30.5, 30.5)
+            if orbit {
+                cam_x = next_x
+                cam_z = next_z
+            } else {
+                # Independent axes slide along pond banks rather than flying
+                # through the water. Orbit remains unconstrained.
+                let cross_x: i32 = (next_x + 32.0) as i32
+                let cross_z: i32 = (cam_z + 32.0) as i32
+                if ground[cross_z * MAP + cross_x] != 1 { cam_x = next_x }
+                let cross_x2: i32 = (cam_x + 32.0) as i32
+                let cross_z2: i32 = (next_z + 32.0) as i32
+                if ground[cross_z2 * MAP + cross_x2] != 1 { cam_z = next_z }
+            }
 
             let sx: i32 = r3d_clampf(cam_x + 32.0, 0.0, 63.0) as i32
             let sz: i32 = r3d_clampf(cam_z + 32.0, 0.0, 63.0) as i32
-            let floor_y: f32 = soil_height(sx, sz, ground[sz * MAP + sx])
+            let floor_y: f32 = heights[sz * MAP + sx]
             let target_y: f32 = floor_y + 1.85
             cam_y = cam_y + (target_y - cam_y) * r3d_clampf(7.0 * dt, 0.0, 1.0)
         }
@@ -878,7 +923,7 @@ function main() -> i32 {
             if !key_r_held {
                 seed = next_random()
                 reset_world(seed, ground, wet, food, plant, age)
-                build_garden_surface(ground, wet)
+                build_garden_surface(ground, wet, heights)
             }
             key_r_held = true
         } else {
@@ -915,7 +960,7 @@ function main() -> i32 {
             if orbit {
                 let sx: i32 = r3d_clampf(cam_x + 32.0, 0.0, 63.0) as i32
                 let sz: i32 = r3d_clampf(cam_z + 32.0, 0.0, 63.0) as i32
-                let focus_y: f32 = soil_height(sx, sz, ground[sz * MAP + sx])
+                let focus_y: f32 = heights[sz * MAP + sx]
                 let target: V3 = v3(cam_x, focus_y, cam_z)
                 eye = v3_sub(target, v3_scale(fwd3, zoom))
                 m4_look_at(p_view, eye, target, v3(0.0, 1.0, 0.0))
@@ -928,7 +973,7 @@ function main() -> i32 {
             m4_mul(p_vp, projection, view)
             r3d_clear_gradient(v3(0.28, 0.45, 0.58), v3(0.75, 0.78, 0.63))
             r3d_draw_mesh(model, viewproj, v3(0.38, 0.78, 0.42), R3D_GOURAUD)
-            paint_living_3d(viewproj, plant, age, wet, ground,
+            paint_living_3d(viewproj, plant, age, wet, heights,
                             eye.x, eye.z, fwd3.x, fwd3.z, orbit)
             gfx_blit_rgb(g, FIELD_X, FIELD_Y, SCENE_W, SCENE_H, r3d_pixels())
             let mode_text: i32 = gfx_draw_text(g, 30, 577,
@@ -943,7 +988,7 @@ function main() -> i32 {
         }
         draw_hud(g, plant, age, weather, brush, paused, show3d)
         if show3d {
-            draw_minimap(g, mini, ground, plant, cam_x, cam_z)
+            draw_minimap(g, mini, ground, plant, cam_x, cam_z, yaw)
             let mode_label: i32 = gfx_draw_text(g, 553, 368,
                 if orbit { "ORBIT  V:WALK" } else { "WALK  V:ORBIT" },
                 1, 202, 224, 173)
