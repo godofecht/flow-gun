@@ -16,14 +16,14 @@ if (dimension && frame) {
       // The embedded Flow browser runtime listens to the same macOS keycode
       // mapping as the native build. Signal a real V key interaction.
       const target = frame.contentWindow;
-      target.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyV", key: "v", bubbles: true }));
-      target.setTimeout(() => target.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyV", key: "v", bubbles: true })), 110);
+      target.dispatchEvent(new KeyboardEvent("keydown", { code: "Tab", key: "Tab", bubbles: true }));
+      target.setTimeout(() => target.dispatchEvent(new KeyboardEvent("keyup", { code: "Tab", key: "Tab", bubbles: true })), 110);
       elevated = !elevated;
       dimension.setAttribute("aria-pressed", String(elevated));
       dimension.firstChild.textContent = elevated ? "↙ Return to 2D " : "↗ Switch 2D / 3D ";
       frame.focus();
     } catch (error) {
-      // The V key always works when the embedded garden has focus.
+      // The Tab key always works when the embedded garden has focus.
       frame.focus();
     }
   });
