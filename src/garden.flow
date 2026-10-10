@@ -13,6 +13,162 @@
 
 import "stdlib/gfx.flow"
 import "stdlib/text.flow"
+# The 3D renderer is Flow's own depth-tested software rasterizer.
+# It projects the *same* cells and organisms as the 2D simulation.
+import "stdlib/render3d.flow"
+
+const KEY_TAB: i32 = 48
+const KEY_V: i32 = 9
+const KEY_Z: i32 = 6
+const KEY_X: i32 = 7
+const KEY_C: i32 = 8
+
+const SCENE_W: i32 = 512
+const SCENE_H: i32 = 480
+
+# Habitat geometry is stable while its living inhabitants change over time.
+# Coordinates: one ecological cell = one metre in X/Z, Y grows upward.
+function soil_height(cx: i32, cy: i32, terrain: i32) -> f32 {
+    if terrain == 1 { return -0.35 }
+    let gentle: f32 = ((hash_xy(cx / 5, cy / 5) % 1000) as f32) / 1000.0
+    let fine: f32 = ((hash_xy(cx, cy) % 1000) as f32) / 1000.0
+    if terrain == 2 { return 0.13 + 0.07 * gentle }
+    return 0.15 + 0.50 * gentle + 0.11 * fine
+}
+
+function terrain_colour3d(terrain: i32, damp: f32) -> V3 {
+    if terrain == 1 { return v3(0.13, 0.38, 0.47) }
+    if terrain == 2 { return v3(0.64, 0.59, 0.44) }
+    return v3(0.22, 0.36 + 0.15 * damp, 0.21)
+}
+
+# Mesh vertices are shared, limiting the ground to 4225 vertices/8192 tris.
+# This is built only after a new landscape is seeded, not every frame.
+function build_garden_surface(ground: ptr<i32>, wet: ptr<f32>) -> void {
+    r3d_mesh_reset()
+    for cy in 0 to 65 {
+        for cx in 0 to 65 {
+            let sx: i32 = if cx < 64 { cx } else { 63 }
+            let sy: i32 = if cy < 64 { cy } else { 63 }
+            let i: i32 = sy * MAP + sx
+            let t: i32 = ground[i]
+            let height: f32 = soil_height(sx, sy, t)
+            let p: V3 = v3((cx as f32) - 32.0, height, (cy as f32) - 32.0)
+            let col: V3 = terrain_colour3d(t, wet[i])
+            let n: i32 = r3d_mesh_vertex(p, v3(0.0, 1.0, 0.0), col)
+        }
+    }
+    for cy in 0 to 64 {
+        for cx in 0 to 64 {
+            let a: i32 = cy * 65 + cx
+            let b: i32 = a + 1
+            let d: i32 = a + 65
+            let e: i32 = d + 1
+            let ta: bool = r3d_mesh_tri(a, d, b)
+            let tb: bool = r3d_mesh_tri(b, d, e)
+        }
+    }
+}
+
+# Every shoot is a 3D organism rooted at the exact corresponding 2D cell.
+# No independent JS world or copied vegetation layout exists.
+function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
+                         wet: ptr<f32>, ground: ptr<i32>,
+                         eye_x: f32, eye_z: f32) -> void {
+    for cy in 0 to MAP {
+        for cx in 0 to MAP {
+            let i: i32 = cy * MAP + cx
+            let kind: i32 = plant[i]
+            if kind > 0 {
+                let fx: f32 = (cx as f32) - 31.5
+                let fz: f32 = (cy as f32) - 31.5
+                let dx: f32 = fx - eye_x
+                let dz: f32 = fz - eye_z
+                if dx * dx + dz * dz < 52.0 * 52.0 {
+                    let jitter: u32 = hash_xy(cx, cy)
+                    let bx: f32 = fx + (((jitter % 10) as f32) - 5.0) * 0.045
+                    let bz: f32 = fz + ((((jitter >> 7) % 10) as f32) - 5.0) * 0.045
+                    let h: f32 = soil_height(cx, cy, ground[i])
+                    let growth: f32 = r3d_clampf((age[i] as f32) / 24.0, 0.25, 1.0)
+                    let mut tall: f32 = 0.27 * growth
+                    let mut radius: f32 = 0.25 * growth
+                    let mut leaf: V3 = v3(0.26, 0.65, 0.30)
+                    if kind == 2 {
+                        tall = 0.9 * growth
+                        radius = 0.29 * growth
+                        leaf = v3(0.22, 0.56, 0.27)
+                    }
+                    if kind == 3 {
+                        tall = 0.70 * growth
+                        radius = 0.38 * growth
+                        leaf = v3(0.16, 0.46, 0.24)
+                    }
+                    if kind == 4 {
+                        tall = 1.8 * growth
+                        radius = 0.78 * growth
+                        leaf = v3(0.13, 0.41, 0.22)
+                    }
+                    let foot: V3 = v3(bx, h + 0.04, bz)
+                    let crown: V3 = v3(bx, h + tall, bz)
+                    if kind == 2 or kind == 4 {
+                        r3d_line3(vp, foot, crown, v3(0.32, 0.28, 0.15))
+                    }
+                    r3d_sprite(vp, crown, radius, leaf)
+                    if kind == 3 {
+                        r3d_sprite(vp, v3(bx - 0.26, h + tall * 0.65, bz),
+                                   radius * 0.6, v3(0.28, 0.62, 0.34))
+                        r3d_sprite(vp, v3(bx + 0.26, h + tall * 0.65, bz),
+                                   radius * 0.6, v3(0.20, 0.58, 0.28))
+                    }
+                    if kind == 4 {
+                        r3d_sprite(vp, v3(bx - radius * 0.6, h + tall * 0.72, bz),
+                                   radius * 0.68, v3(0.20, 0.49, 0.25))
+                        r3d_sprite(vp, v3(bx + radius * 0.4, h + tall * 0.74, bz),
+                                   radius * 0.63, v3(0.15, 0.55, 0.26))
+                    }
+                    if kind == 2 and age[i] >= 12 and wet[i] > 0.29 {
+                        let mut petal: V3 = v3(0.90, 0.48, 0.61)
+                        if jitter % 3 == 1 { petal = v3(0.68, 0.52, 0.89) }
+                        if jitter % 3 == 2 { petal = v3(0.96, 0.77, 0.36) }
+                        r3d_sprite(vp, v3(bx, h + tall + 0.08, bz), radius * 0.70, petal)
+                        r3d_sprite(vp, v3(bx, h + tall + 0.09, bz),
+                                   radius * 0.26, v3(1.0, 0.86, 0.29))
+                    }
+                }
+            }
+        }
+    }
+}
+
+# 2D top-down map is a projection of the same cells, with an exact camera dot.
+function draw_minimap(g: Gfx, fb: ptr<u8>, ground: ptr<i32>,
+                      plant: ptr<i32>, cam_x: f32, cam_z: f32) -> void {
+    for y in 0 to MAP {
+        for x in 0 to MAP {
+            let i: i32 = y * MAP + x
+            let mut r: i32 = 45
+            let mut gr: i32 = 71
+            let mut b: i32 = 38
+            if ground[i] == 1 { r = 28; gr = 92; b = 120 }
+            if ground[i] == 2 { r = 168; gr = 157; b = 121 }
+            if plant[i] == 1 { r = 82; gr = 170; b = 82 }
+            if plant[i] == 2 { r = 220; gr = 119; b = 173 }
+            if plant[i] == 3 { r = 36; gr = 117; b = 68 }
+            if plant[i] == 4 { r = 29; gr = 91; b = 47 }
+            let j: i32 = (y * MAP + x) * 3
+            fb[j] = r as u8
+            fb[j + 1] = gr as u8
+            fb[j + 2] = b as u8
+        }
+    }
+    # Double-size on screen to retain an accessible map of the surface.
+    # One draw call for the image; marker uses a small rectangle.
+    gfx_blit_rgb(g, 568, 448, MAP, MAP, fb)
+    let px: i32 = 568 + ((cam_x + 32.0) as i32)
+    let py: i32 = 448 + ((cam_z + 32.0) as i32)
+    gfx_fill_rect(g, px - 2, py - 2, 5, 5, 244, 244, 218)
+}
+
 import "stdlib/render3d.flow"
 
 const MAP: i32 = 64
@@ -425,7 +581,7 @@ function plant_name(kind: i32) -> string {
 }
 
 function draw_hud(g: Gfx, plant: ptr<i32>, age: ptr<i32>,
-                  weather: i32, brush: i32, paused: bool) -> void {
+                  weather: i32, brush: i32, paused: bool, in_3d: bool) -> void {
     let mut clover: i32 = 0
     let mut flowers: i32 = 0
     let mut ferns: i32 = 0
@@ -459,6 +615,7 @@ function draw_hud(g: Gfx, plant: ptr<i32>, age: ptr<i32>,
     let i9: i32 = gfx_draw_int(g, 678, 310, shrubs, 1, 226, 227, 207)
     let j1: i32 = gfx_draw_text(g, 552, 339, "BLOSSOMS", 1, 127, 164, 130)
     let j2: i32 = gfx_draw_int(g, 656, 337, blossoms, 1, 251, 212, 129)
+    if !in_3d {
     let j3: i32 = gfx_draw_text(g, 552, 389, "PLANTING", 1, 127, 164, 130)
     let j4: i32 = gfx_draw_text(g, 552, 407, plant_name(brush), 2, 237, 227, 183)
     let j5: i32 = gfx_draw_text(g, 552, 443, "1-4  SELECT", 1, 143, 169, 149)
@@ -469,12 +626,23 @@ function draw_hud(g: Gfx, plant: ptr<i32>, age: ptr<i32>,
     let k3: i32 = gfx_draw_text(g, 552, 552, "D  DROUGHT", 1, 143, 169, 149)
     let k4: i32 = gfx_draw_text(g, 552, 569, "R  NEW GARDEN", 1, 143, 169, 149)
     let k5: i32 = gfx_draw_text(g, 552, 586, "P  PAUSE", 1, 143, 169, 149)
+    } else {
+        let j3: i32 = gfx_draw_text(g, 552, 386, "3D WALK", 1, 150, 192, 159)
+        let j4: i32 = gfx_draw_text(g, 552, 404, "WASD MOVE", 1, 186, 212, 187)
+        let j5: i32 = gfx_draw_text(g, 552, 418, "ARROWS LOOK", 1, 186, 212, 187)
+        let j6: i32 = gfx_draw_text(g, 552, 432, "V CAMERA", 1, 186, 212, 187)
+        let j7: i32 = gfx_draw_text(g, 552, 524, "Z RAIN", 1, 186, 212, 187)
+        let j8: i32 = gfx_draw_text(g, 552, 542, "X TEMPERATE", 1, 186, 212, 187)
+        let j9: i32 = gfx_draw_text(g, 552, 560, "C DROUGHT", 1, 186, 212, 187)
+        let j10: i32 = gfx_draw_text(g, 552, 578, "TAB 2D MAP", 1, 186, 212, 187)
+    }
     let l1: i32 = gfx_draw_text(g, 22, 620,
         "GROWTH = LOCAL DISPERSAL + RESOURCE COMPETITION + MICROCLIMATE", 1,
         123, 153, 127)
     let l2: i32 = gfx_draw_text(g, 22, 635,
         "SOIL  /  WATER  /  STONE  /  CLOVER  /  FLOWER  /  FERN  /  SHRUB",
         1, 123, 153, 127)
+    let hint: i32 = gfx_draw_text(g, 553, 60, "TAB 2D/3D", 1, 202, 225, 181)
     if paused {
         let stop: i32 = gfx_draw_text(g, 552, 65, "PAUSED", 2, 243, 150, 125)
     }
@@ -683,6 +851,42 @@ function main() -> i32 {
     let mut focus_z: f32 = 0.0
     let mut key_p_held: bool = false
     let mut key_r_held: bool = false
+    # 3D is a second camera onto the *same* living arrays.
+    # Both projections share the same simulation ticks and seeded RNG.
+    if !r3d_init(SCENE_W, SCENE_H) {
+        println("FAIL: Flow 3D renderer initialization")
+        gfx_close(g)
+        return 3
+    }
+    r3d_set_cull(R3D_CULL_BACK)
+    r3d_set_ambient(0.43)
+    build_garden_surface(ground, wet)
+    let projection: array<f32, 16> = [0.0, 0.0, 0.0, 0.0,
+                                       0.0, 0.0, 0.0, 0.0,
+                                       0.0, 0.0, 0.0, 0.0,
+                                       0.0, 0.0, 0.0, 0.0]
+    let view: array<f32, 16> = [0.0, 0.0, 0.0, 0.0,
+                                 0.0, 0.0, 0.0, 0.0,
+                                 0.0, 0.0, 0.0, 0.0,
+                                 0.0, 0.0, 0.0, 0.0]
+    let viewproj: array<f32, 16> = [0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0, 0.0]
+    let p_proj: ptr<f32> = projection
+    let p_view: ptr<f32> = view
+    let p_vp: ptr<f32> = viewproj
+    let mini: array<u8, 12288> = [0, 0, 0, 0]
+    let mut show3d: bool = false
+    let mut high_camera: bool = true
+    let mut tab_held: bool = false
+    let mut v_held: bool = false
+    let mut cam_x: f32 = 0.0
+    let mut cam_z: f32 = 25.0
+    let mut cam_y: f32 = 13.0
+    let mut yaw: f32 = 0.0
+    let mut pitch: f32 = -0.47
+    m4_perspective(p_proj, r3d_radians(67.0), (SCENE_W as f32) / (SCENE_H as f32), 0.09, 120.0)
     let mut frame: i32 = 0
 
     while frame < MAX_FRAMES {
@@ -713,9 +917,47 @@ function main() -> i32 {
         if gfx_key_down(g, KEY_2) { brush = 2 }
         if gfx_key_down(g, KEY_3) { brush = 3 }
         if gfx_key_down(g, KEY_4) { brush = 4 }
-        if gfx_key_down(g, KEY_W) { weather = 1 }
-        if gfx_key_down(g, KEY_S) { weather = 0 }
-        if gfx_key_down(g, KEY_D) { weather = 2 }
+        if !show3d {
+            if gfx_key_down(g, KEY_W) { weather = 1 }
+            if gfx_key_down(g, KEY_S) { weather = 0 }
+            if gfx_key_down(g, KEY_D) { weather = 2 }
+        } else {
+            if gfx_key_down(g, KEY_Z) { weather = 1 }
+            if gfx_key_down(g, KEY_X) { weather = 0 }
+            if gfx_key_down(g, KEY_C) { weather = 2 }
+        }
+        let tab_now: bool = gfx_key_down(g, KEY_TAB)
+        if tab_now and !tab_held { show3d = !show3d }
+        tab_held = tab_now
+        let v_now: bool = gfx_key_down(g, KEY_V)
+        if v_now and !v_held and show3d { high_camera = !high_camera }
+        v_held = v_now
+        if show3d {
+            let fwd: V3 = r3d_forward(yaw, 0.0)
+            let right: V3 = r3d_right(yaw)
+            let mut mx: f32 = 0.0
+            let mut mz: f32 = 0.0
+            if gfx_key_down(g, KEY_W) { mx = mx + fwd.x; mz = mz + fwd.z }
+            if gfx_key_down(g, KEY_S) { mx = mx - fwd.x; mz = mz - fwd.z }
+            if gfx_key_down(g, KEY_A) { mx = mx - right.x; mz = mz - right.z }
+            if gfx_key_down(g, KEY_D) { mx = mx + right.x; mz = mz + right.z }
+            if gfx_key_down(g, KEY_LEFT) { yaw = yaw + 0.035 }
+            if gfx_key_down(g, KEY_RIGHT) { yaw = yaw - 0.035 }
+            if gfx_key_down(g, KEY_UP) { pitch = pitch + 0.025 }
+            if gfx_key_down(g, KEY_DOWN) { pitch = pitch - 0.025 }
+            pitch = r3d_clampf(pitch, -1.35, 0.45)
+            let length: f32 = sqrtf(mx * mx + mz * mz)
+            if length > 0.001 {
+                let speed: f32 = if high_camera { 0.34 } else { 0.16 }
+                cam_x = r3d_clampf(cam_x + speed * mx / length, -31.0, 31.0)
+                cam_z = r3d_clampf(cam_z + speed * mz / length, -31.0, 31.0)
+            }
+            let ci: i32 = ((cam_z + 32.0) as i32) * MAP + ((cam_x + 32.0) as i32)
+            let base: f32 = soil_height((cam_x + 32.0) as i32,
+                                         (cam_z + 32.0) as i32, ground[ci])
+            let desired: f32 = base + (if high_camera { 12.0 } else { 1.85 })
+            cam_y = cam_y + (desired - cam_y) * 0.1
+        }
         if gfx_key_down(g, KEY_P) {
             if !key_p_held { paused = !paused }
             key_p_held = true
@@ -726,6 +968,7 @@ function main() -> i32 {
             if !key_r_held {
                 seed = next_random()
                 reset_world(seed, ground, wet, food, plant, age)
+                build_garden_surface(ground, wet)
             }
             key_r_held = true
         } else {
@@ -740,6 +983,8 @@ function main() -> i32 {
             let cell: i32 = my * MAP + mx
             if ground[cell] == 0 {
                 if mouse.left != 0 {
+                    cam_x = (mx as f32) - 31.5
+                    cam_z = (my as f32) - 31.5
                     plant[cell] = brush
                     age[cell] = 1
                 }
