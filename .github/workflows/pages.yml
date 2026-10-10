@@ -1,0 +1,75 @@
+name: Publish Flow Garden website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flow-garden-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out garden
+        uses: actions/checkout@v4
+      - name: Check out Flow compiler
+        uses: actions/checkout@v4
+        with:
+          repository: flooooooooooow/flow
+          path: flow-sdk
+          persist-credentials: false
+      - name: Install Emscripten
+        uses: emscripten-core/setup-emsdk@v15
+        with:
+          version: '4.0.13'
+      - name: Verify Emscripten
+        run: emcc --version
+      - name: Build actual Flow garden to WebAssembly
+        run: |
+          ./flow-sdk/flow wasm src/garden.flow --backend=c --out dist/garden
+          test -s dist/garden/index.html
+          test -s dist/garden/garden.wasm
+          test -s dist/garden/garden.js
+      - name: Prepare website
+        run: |
+          cp -R site/. dist/
+          touch dist/.nojekyll
+          test -s dist/index.html
+      - name: Upload site preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-garden-site
+          path: dist/
+          include-hidden-files: true
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+    steps:
+      - name: Publish
+        id: publish
+        uses: actions/deploy-pages@v4
