@@ -23,7 +23,7 @@ jobs:
           ./flow-sdk/flow record src/garden.flow --frames 35 --out /tmp/flow-garden-frames
       - name: Exercise orbit, mouse drag, zoom and walking camera
         env:
-          FLOW_GFX_RECORD_KEYS: '1:48,3-8:13,10-11:124,14:9,16-20:13,23:49,26:9'
+          FLOW_GFX_RECORD_KEYS: '1:35,2:48,4-10:13,12-15:124,17:9,19-24:13,26:49,28:9'
           FLOW_GFX_RECORD_MOUSE: '3,10,140,180,350,240,1,0;11,11,350,240,350,240,0,2;16,23,245,230,340,265,1,0;24,25,340,265,340,265,0,-1'
         run: |
           ./flow-sdk/flow record src/garden.flow --frames 36 --out /tmp/flow-garden-3d
@@ -32,9 +32,21 @@ jobs:
           from hashlib import sha256
           images = sorted(Path("/tmp/flow-garden-3d").rglob("*.ppm"))
           assert len(images) == 36, f"expected 36 rendered frames, got {len(images)}"
-          unique = {sha256(img.read_bytes()).digest() for img in images}
-          assert len(unique) >= 8, f"camera sweep rendered only {len(unique)} distinct frames"
-          print(f"PASS: orbit/zoom/walk camera integration rendered {len(unique)} distinct frames")
+          # P pauses biology before Tab selects 3D. All differences in the
+          # viewport must now come from camera movement and rendering.
+          def viewport_digest(path):
+              data = path.read_bytes()
+              head, width, height, pixels = data.split(b"\\n", 3)
+              assert head == b"P6" and width == b"742 660" and height == b"255"
+              # Exclude all changing UI and the separate 2D minimap.
+              scene = b"".join(pixels[(y*742+20)*3:(y*742+532)*3]
+                               for y in range(90, 570))
+              return sha256(scene).digest()
+          unique = {viewport_digest(img) for img in images[3:]}
+          assert len(unique) >= 8, f"paused camera sweep rendered only {len(unique)} distinct views"
+          assert viewport_digest(images[3]) != viewport_digest(images[16]), "orbit camera did not move"
+          assert viewport_digest(images[18]) != viewport_digest(images[29]), "walk camera did not move"
+          print(f"PASS: paused Flow ecology / {len(unique)} distinct 3D camera views")
           PY
       - name: Upload recorded frames
         if: success()
