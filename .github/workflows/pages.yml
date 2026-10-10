@@ -55,7 +55,7 @@ jobs:
           page = Path("dist/garden/index.html")
           html = page.read_text()
           assert "</head>" in html
-          html = html.replace("</head>", '<link rel="stylesheet" href="../embed.css">\\n</head>')
+          html = html.replace("</head>", '<link rel="stylesheet" href="../embed.css"></head>')
           page.write_text(html)
           PY
       - name: Prepare website
