@@ -907,9 +907,8 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                         for segment in 0 to internodes {
                             let t0: f32 = (segment as f32) / (internodes as f32)
                             let t1: f32 = ((segment + 1) as f32) / (internodes as f32)
-                            let bark: V3 = if segment % 2 == 0 {
-                                v3(0.39, 0.28, 0.18)
-                            } else { v3(0.30, 0.23, 0.15) }
+                            let mut bark: V3 = v3(0.39, 0.28, 0.18)
+                            if segment % 2 != 0 { bark = v3(0.30, 0.23, 0.15) }
                             r3d_line3(vp, v3(bx, h + tall * t0, bz),
                                        v3(bx, h + tall * t1, bz), bark)
                             if close and segment < 2 {
