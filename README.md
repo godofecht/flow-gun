@@ -61,6 +61,33 @@ biomechanical leaf-growth equations. Genetics and genotype-to-phenotype
 causality are implemented rather than depicted decoratively; parameter values
 are illustrative.
 
+## Developmental genome compiler (experimental)
+
+The Flow engine now compiles each occupied plant's diploid alleles into a small
+**four-instruction developmental program** (four packed 32-bit words):
+
+| Opcode | Organ-development program | Parameters |
+|---|---|---|
+| `AXIS` (1) | Primary stem / internode development | Stature, moisture physiology, species |
+| `RAMIFY` (2) | Lateral meristems and shrub branching | Branch allocation, stature |
+| `FOLIATE` (3) | Rosette leaflets and fern pinnae | Branch/leaf allocation, hydration |
+| `REPRODUCE` (4) | Flowering threshold, pigmentation and reproductive allocation | Reproductive allocation, pigmentation, stature |
+
+A per-cell program cache tracks both parental chromosomes and species. When
+inheritance, mutation or deliberate planting changes a genome, the program
+is recompiled; otherwise the renderer interprets the existing instructions.
+This avoids rebuilding genotype-dependent instruction records on every camera
+frame. The compiler is checked with dedicated bytecode format, operand and
+allele-differentiation tests at startup. **These are developmental instructions,
+not machine code, and are not a molecular gene-regulatory model.**
+
+The 3D interpreter now renders distinct trunk internodes with bark bands and
+lower woody branches, alongside species-specific leaf and floral organs.
+Camera-distance levels of detail limit work on distant plants. Reproductive
+fitness is still resolved by the ecology's resource-limited local mating rules,
+using the same inherited allocation locus; the opcode provides a visual
+developmental encoding rather than a separate independent breeding engine.
+
 ## Optimised 3D navigation
 
 The 3D mode now features smooth frame-time-based movement, a birds-eye **orbit**
