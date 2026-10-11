@@ -88,6 +88,27 @@ fitness is still resolved by the ecology's resource-limited local mating rules,
 using the same inherited allocation locus; the opcode provides a visual
 developmental encoding rather than a separate independent breeding engine.
 
+## Camera and touch-first interaction
+
+The default 3D orbit opens centered over the garden at a readable elevated
+pitch rather than looking across the garden from a displaced point.
+Mouse dragging rotates the camera with finer sensitivity; zoom steps scale
+with camera distance so both close morphology inspection and landscape
+overview remain controllable, with smoothed transitions. Space resets the
+camera to a stable center view.
+
+On touch devices, **two translucent thumb controls** appear in 3D: the left
+cluster moves with WASD semantics; the right cluster looks around using the
+arrow-key camera controls. Plus/minus buttons adjust the orbit's dolly
+distance. Controls release key state on pointer cancellation, blur, or
+lost focus, preventing movement from becoming stuck. A live camera-mode
+indicator distinguishes top-down, orbit and walk views. Pause, world reset
+and camera recenter remain reachable on narrow mobile screens.
+
+The [Chromium integration check](scripts/smoke-browser.mjs) tests a visible
+running WASM canvas, actual movement/look key presses and releases, mobile
+pause/resume and the camera-mode indicator on a 390px touchscreen viewport.
+
 ## Optimised 3D navigation
 
 The 3D mode now features smooth frame-time-based movement, a birds-eye **orbit**
