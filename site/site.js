@@ -110,7 +110,25 @@ function showRuntimeFailure(reason) {
 function monitorReady(version, attempt) {
   if (version !== loadVersion) return;
   const win = getEngine();
-  if (win && win.flowGfx.frames > 0) {
+  const canvas = win?.flowGfx?.canvas;
+  let dimensions = canvas?.getBoundingClientRect();
+  if (win && win.flowGfx.frames > 0 && dimensions?.width < 32) {
+    // Recover from a stale stylesheet: containment inside a grid's
+    // auto-sized track can leave the running canvas at 0 x 0 pixels.
+    const main = win.document.querySelector("main");
+    const stage = win.document.querySelector(".stage");
+    if (main && stage) {
+      main.style.display = "flex";
+      main.style.alignItems = "stretch";
+      main.style.justifyContent = "stretch";
+      stage.style.width = "100%";
+      stage.style.flex = "1 1 auto";
+      stage.style.minWidth = "0";
+    }
+    dimensions = canvas?.getBoundingClientRect();
+  }
+  if (win && win.flowGfx.frames > 0 &&
+      dimensions?.width >= 32 && dimensions?.height >= 32) {
     ready = true;
     if (engineFailure) engineFailure.hidden = true;
     syncControls();
@@ -128,7 +146,9 @@ function monitorReady(version, attempt) {
     } else if (attempt < 120) {
       window.setTimeout(() => monitorReady(version, attempt + 1), 150);
     } else {
-      showRuntimeFailure("The WebAssembly canvas did not produce a frame within 18 seconds. Retry, or open the standalone viewer.");
+      showRuntimeFailure(win?.flowGfx?.frames > 0
+        ? "The Flow simulation is running, but its canvas has no visible size. Retry or open the standalone viewer."
+        : "The WebAssembly canvas did not produce a frame within 18 seconds. Retry, or open the standalone viewer.");
     }
   }
 }
