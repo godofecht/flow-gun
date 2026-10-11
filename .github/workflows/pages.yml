@@ -41,7 +41,9 @@ jobs:
       - name: Verify Emscripten
         run: emcc --version
       - name: Validate website JavaScript
-        run: node --check site/site.js
+        run: |
+          node --check site/site.js
+          node --check scripts/smoke-browser.mjs
       - name: Build actual Flow garden to WebAssembly
         run: |
           ./flow-sdk/flow wasm src/garden.flow --backend=c --out dist/garden
@@ -65,6 +67,17 @@ jobs:
           test -s dist/index.html
           test -s dist/embed.css
           grep -q '../embed.css' dist/garden/index.html
+      - name: Smoke-test the real WebAssembly canvas in Chrome
+        run: |
+          npm install --no-save --ignore-scripts playwright-core@1.55.1
+          node scripts/smoke-browser.mjs
+      - name: Upload browser screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-garden-browser-render
+          path: /tmp/flow-garden-browser-smoke.png
+          if-no-files-found: ignore
       - name: Upload site preview
         uses: actions/upload-artifact@v4
         with:
