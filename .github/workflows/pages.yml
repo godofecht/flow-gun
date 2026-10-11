@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/**'
       - 'site/**'
+      - 'scripts/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
