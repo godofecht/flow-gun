@@ -18,6 +18,10 @@ const stage = document.getElementById("stage-screen");
 const engineFailure = document.getElementById("engine-failure");
 const engineErrorMessage = document.getElementById("engine-error-message");
 const engineRetry = document.getElementById("engine-retry");
+const mobilePause = document.getElementById("mobile-pause");
+const mobileReset = document.getElementById("mobile-reset");
+const touchPad = document.getElementById("touch-pad");
+const holdButtons = [...document.querySelectorAll("[data-hold-key]")];
 const weatherControls = [...document.querySelectorAll("[data-weather]")];
 const speciesControls = [...document.querySelectorAll("[data-species]")];
 
@@ -47,6 +51,13 @@ function syncControls() {
     pause.setAttribute("aria-pressed", String(paused));
     pause.firstChild.textContent = paused ? "▶ Resume " : "Ⅱ Pause ";
   }
+  if (mobilePause) {
+    mobilePause.disabled = !ready;
+    mobilePause.setAttribute("aria-pressed", String(paused));
+    mobilePause.textContent = paused ? "▶ Resume" : "Ⅱ Pause";
+  }
+  if (mobileReset) mobileReset.disabled = !ready;
+  if (touchPad) touchPad.hidden = !ready || !in3D;
   if (reseed) reseed.disabled = !ready;
   for (const btn of weatherControls) {
     btn.disabled = !ready;
@@ -177,6 +188,7 @@ function awaitStart() {
   paused = false;
   weather = 0;
   brush = 2;
+  releaseMovement();
   const version = ++loadVersion;
   if (engineFailure) engineFailure.hidden = true;
   syncControls();
@@ -192,6 +204,7 @@ function awaitStart() {
 frame?.addEventListener("load", awaitStart);
 
 function restartEngine() {
+  releaseMovement();
   ready = false;
   if (engineFailure) engineFailure.hidden = true;
   syncControls();
@@ -205,6 +218,7 @@ engineRetry?.addEventListener("click", restartEngine);
 dimension?.addEventListener("click", () => {
   if (!sendFlowKey("Tab", "Tab")) return;
   in3D = !in3D;
+  if (!in3D) releaseMovement();
   syncControls();
 });
 
@@ -245,16 +259,59 @@ for (const btn of speciesControls) {
     syncControls();
   });
 }
-pause?.addEventListener("click", () => {
+function togglePause() {
   if (!sendFlowKey("KeyP","p")) return;
   paused = !paused;
   syncControls();
-});
-reseed?.addEventListener("click", () => {
+}
+function resetGarden() {
   if (!sendFlowKey("KeyR","r")) return;
-  paused = false;
-  // A fresh garden is re-seeded without replacing the WebAssembly process.
+  // Reset does not unpause the Flow engine.
   syncControls();
+}
+pause?.addEventListener("click", togglePause);
+mobilePause?.addEventListener("click", togglePause);
+reseed?.addEventListener("click", resetGarden);
+mobileReset?.addEventListener("click", resetGarden);
+
+const movementCodes = { KeyW: 13, KeyA: 0, KeyS: 1, KeyD: 2 };
+const heldKeys = new Set();
+function holdMove(code, isDown) {
+  const win = getEngine();
+  if (!(code in movementCodes)) return;
+  const idx = movementCodes[code];
+  if (!isDown) {
+    heldKeys.delete(code);
+    if (win) {
+      win.flowGfx.keys[idx] = 0;
+      win.flowGfx.release[idx] = 0;
+    }
+    return;
+  }
+  if (!ready || !in3D || !win) return;
+  heldKeys.add(code);
+  win.flowGfx.keys[idx] = 1;
+  win.flowGfx.seen[idx] = 0;
+  win.flowGfx.release[idx] = 0;
+  win.flowGfx.age[idx] = 0;
+}
+function releaseMovement() {
+  for (const key of [...heldKeys]) holdMove(key, false);
+}
+for (const btn of holdButtons) {
+  const code = btn.dataset.holdKey;
+  btn.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    try { btn.setPointerCapture(event.pointerId); } catch (error) {}
+    holdMove(code, true);
+  });
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture", "pointerleave"]) {
+    btn.addEventListener(type, () => holdMove(code, false));
+  }
+}
+window.addEventListener("blur", releaseMovement);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) releaseMovement();
 });
 expand?.addEventListener("click", async () => {
   if (!stage) return;

@@ -8,7 +8,7 @@
   <title>Flow Garden · Living Evolution Lab</title>
   <link rel="stylesheet" href="./style.css">
   <script src="./site.js" defer></script>
-<meta name="flow-commit" content="4eb7eff846aabb25727e596be0d1106fa5a2269b"></head>
+<meta name="flow-commit" content="7ad0a84067cb5a4d2535ab1d8996e763311aad81"></head>
 <body>
 <div class="app">
   <header class="topbar">
@@ -68,8 +68,17 @@
             <a href="./garden/index.html?autostart=1" target="_blank" rel="noopener">Open the viewer separately ↗</a>
           </div>
         </div>
+        <div class="touch-pad" id="touch-pad" aria-label="Touch navigation">
+          <button type="button" data-hold-key="KeyW" aria-label="Move forward">↑</button>
+          <div class="touch-pad-row">
+            <button type="button" data-hold-key="KeyA" aria-label="Move left">←</button>
+            <button type="button" data-hold-key="KeyS" aria-label="Move backward">↓</button>
+            <button type="button" data-hold-key="KeyD" aria-label="Move right">→</button>
+          </div>
+        </div>
         <span class="canvas-corner top-left"></span><span class="canvas-corner bottom-right"></span>
       </div>
+      <div class="mobile-actions"><button type="button" id="mobile-pause" aria-pressed="false">Ⅱ Pause</button><button type="button" id="mobile-reset">⟳ Reset</button><span>Touch arrows move in 3D</span></div>
       <div class="stage-footer"><span id="garden-runtime" class="runtime-status" role="status" aria-live="polite">○ LOADING FLOW ENGINE…</span><span>Drag · Look <i> / </i> WASD · Move <i> / </i> Wheel · Zoom <i> / </i> F · Sprint</span><button id="restart" type="button" title="Restart Flow WebAssembly process">↻ Reload</button></div>
     </section>
     <aside class="panel science" aria-label="Evolution and morphology">
