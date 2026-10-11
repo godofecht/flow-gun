@@ -56,6 +56,31 @@ try {
     return { frame: win.flowGfx?.frames, canvas: win.flowGfx?.canvas?.getBoundingClientRect().width, view: document.querySelector('#toggle-dimension').getAttribute('aria-pressed') };
   });
   if (state.view !== 'true' || state.frame <= after) throw new Error(`3D toggle failed: ${JSON.stringify(state)}`);
+  // Exercise the touch pad on the real WASM key array, including release.
+  const mobile = await browser.newPage({ viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true });
+  try {
+    await mobile.goto(address, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await mobile.waitForFunction(() => {
+      const w = document.querySelector('#garden-frame')?.contentWindow;
+      return w?.flowGfx?.frames > 5 && w.flowGfx.canvas?.getBoundingClientRect().width > 80;
+    }, undefined, { timeout: 45000 });
+    await mobile.locator('#toggle-dimension').click();
+    await mobile.waitForTimeout(100);
+    const forward = mobile.locator('[data-hold-key="KeyW"]');
+    await forward.dispatchEvent('pointerdown', { pointerId: 12, pointerType: 'touch', bubbles: true });
+    const held = await mobile.evaluate(() => document.querySelector('#garden-frame').contentWindow.flowGfx.keys[13]);
+    if (held !== 1) throw new Error('Touch move did not hold Flow key W');
+    await forward.dispatchEvent('pointerup', { pointerId: 12, pointerType: 'touch', bubbles: true });
+    const released = await mobile.evaluate(() => document.querySelector('#garden-frame').contentWindow.flowGfx.keys[13]);
+    if (released !== 0) throw new Error('Touch move key remains stuck after release');
+    await mobile.locator('#mobile-pause').click();
+    if (await mobile.locator('#mobile-pause').getAttribute('aria-pressed') !== 'true') {
+      throw new Error('Mobile pause control failed');
+    }
+    await mobile.locator('#mobile-pause').click();
+    console.log('PASS: mobile WASM touch movement, key release and pause/resume');
+    await mobile.screenshot({ path: '/tmp/flow-garden-mobile-smoke.png' });
+  } finally { await mobile.close(); }
   await page.screenshot({ path: '/tmp/flow-garden-browser-smoke.png' });
   console.log(`PASS: live Flow WebAssembly, ${before.colors} colors, ${before.width}x${before.height} visible canvas, ${before.frame} -> ${after} frames, 3D view ${state.view}`);
   if (errors.length) throw new Error(`Browser exceptions: ${errors.join('; ')}`);
