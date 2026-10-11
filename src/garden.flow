@@ -293,10 +293,14 @@ function step_world(ground: ptr<i32>,
                         let fit: f32 = plant_fitness(parent, wet[i], food[i],
                                                      light, genes_a[source],
                                                      genes_b[source])
-                        let allocation: f32 = gene_value(genes_a[source],
-                                                          genes_b[source], 16)
-                        let stature: f32 = gene_value(genes_a[source],
-                                                       genes_b[source], 8)
+                        # Execute the genetic REPRODUCE instruction in the
+                        # ecological update, not merely in graphics. Its
+                        # allocation field changes offspring probability.
+                        let reproductive_code: u32 = compile_gene_instruction(
+                            4, parent, genes_a[source], genes_b[source])
+                        let allocation: f32 = instruction_primary(reproductive_code)
+                        let stature: f32 = (((reproductive_code &
+                                               (255 as u32)) as f32) / 255.0)
                         let mut spread: f32 = 0.36
                         if parent == 2 { spread = 0.28 }
                         if parent == 3 { spread = 0.24 }
