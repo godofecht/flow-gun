@@ -6,11 +6,13 @@ A colourful, interactive 2D and 3D garden in which **soil, moisture, light, reso
 
 ## Play on GitHub Pages
 
-The browser site is generated from **the same `src/garden.flow`** source using Emscripten and the Flow WASM backend. The [Pages workflow](.github/workflows/pages.yml) automatically builds the site and publishes the generated WebAssembly bundle once GitHub Pages is enabled.
+The browser site is generated from **the same `src/garden.flow`** source using Emscripten and Flow's WebAssembly backend. The [website workflow](.github/workflows/pages.yml) compiles the real program, loads it in headless Chromium, verifies that **the canvas has a nonzero visible size, contains actual garden pixels, advances frames, and switches to 3D**, and then mirrors the verified static files and `.wasm` binary to the repository's root. GitHub Pages serves this from **Deploy from a branch → main → /(root)**.
 
-GitHub Pages is deployed by the [publish workflow](.github/workflows/pages.yml), which compiles the original Flow program to WebAssembly before deployment. The repository's Pages source must remain set to **GitHub Actions** (rather than branch-based Jekyll) for the interactive site to stay live.
+The workflow also opens the **actual public GitHub Pages URL in Chromium after publication** and checks its embedded Flow engine plus the exact source-commit marker. This catches deployment races, stale Pages output and an apparently successful build that displays a blank canvas. The previous competing direct-deployment mechanism has been removed.
 
 After deployment, the public URL is: https://godofecht.github.io/flow-gun/
+
+**If the canvas appears blank:** reload the page without cache (Shift + Reload, or Cmd + Shift + R on Mac), or open the [standalone viewer](https://godofecht.github.io/flow-gun/garden/index.html?autostart=1). The October 2026 zero-width canvas regression is fixed in `site/embed.css`; a dedicated real-browser regression test prevents silently republishing that bug. If loading itself fails, the dashboard displays a retry control and the engine's error.
 
 ## Full-screen evolutionary laboratory
 
