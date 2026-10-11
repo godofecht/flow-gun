@@ -27,6 +27,12 @@ try {
   page.on('requestfailed', request => errors.push(`${request.url()} ${request.failure()?.errorText}`));
   const address = process.env.GARDEN_TEST_URL || `http://127.0.0.1:${port}/`;
   await page.goto(address, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  if (process.env.GARDEN_EXPECTED_SHA) {
+    const servedRevision = await page.locator('meta[name="flow-commit"]').getAttribute('content').catch(() => null);
+    if (servedRevision !== process.env.GARDEN_EXPECTED_SHA) {
+      throw new Error(`Public site is stale: expected ${process.env.GARDEN_EXPECTED_SHA}, served ${servedRevision}`);
+    }
+  }
   await page.waitForFunction(() => {
     const win = document.querySelector('#garden-frame')?.contentWindow;
     return win?.flowGfx?.frames > 8 && win.flowGfx.canvas?.getBoundingClientRect().width > 300;
