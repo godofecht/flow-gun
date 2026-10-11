@@ -761,6 +761,60 @@ function build_garden_surface(ground: ptr<i32>, wet: ptr<f32>,
     }
 }
 
+# Genetic development compiler: four typed instructions per organism.
+# Instruction format: [opcode:8][primary operand:8][secondary:8][gate:8].
+# 1 AXIS -> internode count, elongation, maturity threshold
+# 2 RAMIFY -> branch meristem count, divergence, lateral tissue
+# 3 FOLIATE -> leaf count, blade size, chlorophyll/photosynthetic allocation
+# 4 REPRODUCE -> seed allocation, pigmentation, phenological onset
+# Unlike a sprite palette, the program drives the organ graph and fitness.
+# A cache key combines species and both homologous chromosomes. Planting,
+# inheritance or mutation automatically triggers re-compilation.
+function compile_gene_instruction(op: i32, kind: i32,
+                                  ga: u32, gb: u32) -> u32 {
+    let height: i32 = (gene_value(ga, gb, 8) * 255.0) as i32
+    let branching: i32 = (gene_value(ga, gb, 16) * 255.0) as i32
+    let pigment: i32 = (gene_value(ga, gb, 24) * 255.0) as i32
+    let hydration: i32 = (gene_value(ga, gb, 0) * 255.0) as i32
+    if op == 1 {
+        return ((1 as u32) << 24) | ((height as u32) << 16) |
+               ((hydration as u32) << 8) | (kind as u32)
+    }
+    if op == 2 {
+        return ((2 as u32) << 24) | ((branching as u32) << 16) |
+               ((height as u32) << 8) | (kind as u32)
+    }
+    if op == 3 {
+        return ((3 as u32) << 24) | ((branching as u32) << 16) |
+               ((hydration as u32) << 8) | (kind as u32)
+    }
+    return ((4 as u32) << 24) | ((branching as u32) << 16) |
+           ((pigment as u32) << 8) | (height as u32)
+}
+
+function instruction_primary(inst: u32) -> f32 {
+    return (((inst >> 16) & (255 as u32)) as f32) / 255.0
+}
+function instruction_secondary(inst: u32) -> f32 {
+    return (((inst >> 8) & (255 as u32)) as f32) / 255.0
+}
+function verify_gene_compiler() -> bool {
+    let a: u32 = 0 as u32
+    let b: u32 = (255 as u32) * (16843009 as u32)
+    for kind in 1 to 5 {
+        for op in 1 to 5 {
+            let code: u32 = compile_gene_instruction(op, kind, a, b)
+            if ((code >> 24) as i32) != op { return false }
+            if instruction_primary(code) < 0.49 or instruction_primary(code) > 0.51 {
+                return false
+            }
+        }
+    }
+    let low: u32 = compile_gene_instruction(2, 4, 0 as u32, 0 as u32)
+    let high: u32 = compile_gene_instruction(2, 4, b, b)
+    return instruction_primary(low) < instruction_primary(high)
+}
+
 # Every shoot is a 3D organism rooted at the exact corresponding 2D cell.
 # No independent JS world or copied vegetation layout exists.
 # Compact deterministic developmental graph:
@@ -770,7 +824,10 @@ function build_garden_surface(ground: ptr<i32>, wet: ptr<f32>,
 function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                          wet: ptr<f32>, food: ptr<f32>,
                          genes_a: ptr<u32>, genes_b: ptr<u32>,
-                         heights: ptr<f32>,
+                         code_axis: ptr<u32>, code_branch: ptr<u32>,
+                         code_leaf: ptr<u32>, code_seed: ptr<u32>,
+                         cached_a: ptr<u32>, cached_b: ptr<u32>,
+                         cached_species: ptr<i32>, heights: ptr<f32>,
                          eye_x: f32, eye_z: f32,
                          forward_x: f32, forward_z: f32, orbit: bool) -> void {
     for cy in 0 to MAP {
@@ -786,13 +843,29 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                 let front: f32 = dx * forward_x + dz * forward_z
                 # Avoid hashing, projecting and drawing invisible plants.
                 if dist2 < 3600.0 and front > -3.0 {
+                    if cached_species[i] != kind or
+                       cached_a[i] != genes_a[i] or cached_b[i] != genes_b[i] {
+                        # Only changed genomes are compiled; camera frames
+                        # simply interpret cached organ instructions.
+                        code_axis[i] = compile_gene_instruction(1, kind, genes_a[i], genes_b[i])
+                        code_branch[i] = compile_gene_instruction(2, kind, genes_a[i], genes_b[i])
+                        code_leaf[i] = compile_gene_instruction(3, kind, genes_a[i], genes_b[i])
+                        code_seed[i] = compile_gene_instruction(4, kind, genes_a[i], genes_b[i])
+                        cached_a[i] = genes_a[i]
+                        cached_b[i] = genes_b[i]
+                        cached_species[i] = kind
+                    }
+                    let axis_op: u32 = code_axis[i]
+                    let branch_op: u32 = code_branch[i]
+                    let leaf_op: u32 = code_leaf[i]
+                    let seed_op: u32 = code_seed[i]
                     let detail: bool = dist2 < (if orbit { 900.0 } else { 400.0 })
                     let close: bool = dist2 < (if orbit { 400.0 } else { 196.0 })
                     let ga: u32 = genes_a[i]
                     let gb: u32 = genes_b[i]
-                    let stature: f32 = gene_value(ga, gb, 8)
-                    let branching: f32 = gene_value(ga, gb, 16)
-                    let pigment: f32 = gene_value(ga, gb, 24)
+                    let stature: f32 = instruction_primary(axis_op)
+                    let branching: f32 = instruction_primary(branch_op)
+                    let pigment: f32 = instruction_secondary(seed_op)
                     let jitter: u32 = hash_xy(cx, cy)
                     let bx: f32 = fx + (((jitter % 10) as f32) - 5.0) * 0.045
                     let bz: f32 = fz + ((((jitter >> 7) % 10) as f32) - 5.0) * 0.045
@@ -822,8 +895,29 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                     }
                     let base: V3 = v3(bx, h + 0.035, bz)
                     let crown: V3 = v3(bx, h + tall, bz)
-                    if close and (kind == 2 or kind == 3 or kind == 4) {
-                        r3d_line3(vp, base, crown, v3(0.34, 0.30, 0.17))
+                    if kind == 4 and detail {
+                        # Axial cambium: segmented woody trunk, with successively
+                        # narrower / lighter bark bands up the growth axis.
+                        # Lower internodes remain visible through the canopy.
+                        let internodes: i32 = 3 + (stature * 4.0) as i32
+                        for segment in 0 to internodes {
+                            let t0: f32 = (segment as f32) / (internodes as f32)
+                            let t1: f32 = ((segment + 1) as f32) / (internodes as f32)
+                            let bark: V3 = if segment % 2 == 0 {
+                                v3(0.39, 0.28, 0.18)
+                            } else { v3(0.30, 0.23, 0.15) }
+                            r3d_line3(vp, v3(bx, h + tall * t0, bz),
+                                       v3(bx, h + tall * t1, bz), bark)
+                            if close and segment < 2 {
+                                let root_spread: f32 = 0.10 + 0.09 * (2 - segment) as f32
+                                r3d_line3(vp,
+                                    v3(bx - root_spread, h + tall * t0, bz),
+                                    v3(bx + root_spread * 0.65, h + tall * t1, bz),
+                                    bark)
+                            }
+                        }
+                    } else if close and (kind == 2 or kind == 3) {
+                        r3d_line3(vp, base, crown, v3(0.30, 0.39, 0.20))
                     }
                     # At distance one crown, not a bundle of tiny sprites.
                     r3d_sprite(vp, crown, radius, leaf)
@@ -831,7 +925,7 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                         if kind == 1 {
                             # Clover is a basal rosette. The branch locus
                             # controls leaflet number; no tall woody stem.
-                            let leaves: i32 = 2 + (branching * 3.0) as i32
+                            let leaves: i32 = 2 + (instruction_primary(leaf_op) * 4.0) as i32
                             for b in 0 to leaves {
                                 let sx: f32 = if b % 2 == 0 { -1.0 } else { 1.0 }
                                 let sz: f32 = if b < 2 { -1.0 } else { 1.0 }
@@ -845,7 +939,7 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                         if kind == 3 {
                             # Paired lateral pinnae expand along a rachis,
                             # matching the fern's alternating phyllotaxis.
-                            let pairs: i32 = 2 + (branching * 3.0) as i32
+                            let pairs: i32 = 2 + (instruction_primary(leaf_op) * 3.0) as i32
                             for b in 0 to pairs {
                                 let t: f32 = 0.38 + (b as f32) * 0.12
                                 let spread: f32 = radius * (0.90 - 0.11 * (b as f32))
@@ -858,7 +952,7 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                         if kind == 4 {
                             # Stature controls internode lengths; branching
                             # controls number of growing terminal meristems.
-                            let count: i32 = 2 + (branching * 3.0) as i32
+                            let count: i32 = 2 + (instruction_primary(branch_op) * 4.0) as i32
                             for b in 0 to count {
                                 let sx: f32 = if b % 2 == 0 { -1.0 } else { 1.0 }
                                 let sz: f32 = if b % 4 < 2 { -1.0 } else { 1.0 }
@@ -875,7 +969,8 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                         if kind == 2 {
                             # Genotype regulates anthocyanin-like flower hue;
                             # flowering requires maturity and viable tissue.
-                            let threshold: i32 = 9 + (stature * 8.0) as i32
+                            let threshold: i32 = 9 + (instruction_secondary(seed_op) * 5.0 +
+                                                      stature * 5.0) as i32
                             if age[i] >= threshold and wet[i] > 0.29 and food[i] > 0.20 {
                                 let mut petals: V3 = v3(0.94, 0.52, 0.60)
                                 if pigment < 0.36 { petals = v3(0.62, 0.50, 0.91) }
@@ -956,6 +1051,12 @@ function main() -> i32 {
     let genes_b_next: array<u32, 4096> = [0, 0, 0, 0]
     let pixels: array<u8, 786432> = [0, 0, 0, 0]
 
+    # Validate typed developmental instruction compilation before rendering.
+    if !verify_gene_compiler() {
+        println("FAIL: genetic development compiler")
+        return 5
+    }
+    println("PASS: typed genome-to-organ instruction compilation")
     # Verify diploid inheritance, mutation bounds and genotype selection.
     if !verify_genotype_mechanics() {
         println("FAIL: genomic transmission or phenotype differentiation")
@@ -1013,6 +1114,14 @@ function main() -> i32 {
     let p_view: ptr<f32> = view
     let p_vp: ptr<f32> = viewproj
     let mini: array<u8, 12288> = [0, 0, 0, 0]
+    # Interpreter program cache: four 32-bit opcodes per living cell.
+    let code_axis: array<u32, 4096> = [0, 0, 0, 0]
+    let code_branch: array<u32, 4096> = [0, 0, 0, 0]
+    let code_leaf: array<u32, 4096> = [0, 0, 0, 0]
+    let code_seed: array<u32, 4096> = [0, 0, 0, 0]
+    let cached_a: array<u32, 4096> = [0, 0, 0, 0]
+    let cached_b: array<u32, 4096> = [0, 0, 0, 0]
+    let cached_species: array<i32, 4096> = [0, 0, 0, 0]
     # Two navigable cameras observe one ecological state. The 2D pointer,
     # orbit focal point and walk position share these map coordinates.
     let mut show3d: bool = false
@@ -1270,7 +1379,9 @@ function main() -> i32 {
                 r3d_clear_gradient(v3(0.28, 0.45, 0.58), v3(0.75, 0.78, 0.63))
                 r3d_draw_mesh(model, viewproj, v3(0.38, 0.78, 0.42), R3D_GOURAUD)
                 paint_living_3d(viewproj, plant, age, wet, food,
-                                genes_a, genes_b, heights,
+                                genes_a, genes_b, code_axis, code_branch,
+                                code_leaf, code_seed, cached_a, cached_b,
+                                cached_species, heights,
                                 eye.x, eye.z, fwd3.x, fwd3.z, orbit)
                 rendered_epoch = epoch
                 rendered_x = cam_x
