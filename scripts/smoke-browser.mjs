@@ -29,7 +29,7 @@ try {
   await page.waitForFunction(() => {
     const win = document.querySelector('#garden-frame')?.contentWindow;
     return win?.flowGfx?.frames > 8 && win.flowGfx.canvas?.getBoundingClientRect().width > 300;
-  }, { timeout: 45000 });
+  }, undefined, { timeout: 45000 });
   const before = await page.evaluate(() => {
     const win = document.querySelector('#garden-frame').contentWindow;
     const c = win.flowGfx.canvas, rect = c.getBoundingClientRect();
