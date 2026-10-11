@@ -819,6 +819,129 @@ function verify_gene_compiler() -> bool {
     return instruction_primary(low) < instruction_primary(high)
 }
 
+# Low-poly developmental organs share Flow's depth-tested triangle rasterizer.
+# Two quad faces per stem section form a visibly tapering woody prism; blades
+# are diamond-shaped in world space with a raised midrib, not flat sprites.
+function append_tapered_wood(base: V3, tip: V3, thick: f32,
+                            colour: V3) -> void {
+    let narrow: f32 = thick * 0.37
+    let a: i32 = r3d_mesh_vertex(v3(base.x - thick, base.y, base.z),
+                                 v3(-1.0, 0.0, 0.0), colour)
+    let b: i32 = r3d_mesh_vertex(v3(base.x + thick, base.y, base.z),
+                                 v3(1.0, 0.0, 0.0), colour)
+    let c: i32 = r3d_mesh_vertex(v3(tip.x - narrow, tip.y, tip.z),
+                                 v3(-1.0, 0.4, 0.0), colour)
+    let d: i32 = r3d_mesh_vertex(v3(tip.x + narrow, tip.y, tip.z),
+                                 v3(1.0, 0.4, 0.0), colour)
+    let e: i32 = r3d_mesh_vertex(v3(base.x, base.y, base.z - thick),
+                                 v3(0.0, 0.0, -1.0), colour)
+    let g: i32 = r3d_mesh_vertex(v3(base.x, base.y, base.z + thick),
+                                 v3(0.0, 0.0, 1.0), colour)
+    let h: i32 = r3d_mesh_vertex(v3(tip.x, tip.y, tip.z - narrow),
+                                 v3(0.0, 0.4, -1.0), colour)
+    let k: i32 = r3d_mesh_vertex(v3(tip.x, tip.y, tip.z + narrow),
+                                 v3(0.0, 0.4, 1.0), colour)
+    let t0: bool = r3d_mesh_tri(a, b, c)
+    let t1: bool = r3d_mesh_tri(c, b, d)
+    let t2: bool = r3d_mesh_tri(e, g, h)
+    let t3: bool = r3d_mesh_tri(h, g, k)
+}
+
+function append_leaf_blade(root: V3, tip: V3, width: f32, leaf: V3) -> void {
+    let mid: V3 = v3((root.x + tip.x) * 0.5,
+                      (root.y + tip.y) * 0.5 + width * 0.18,
+                      (root.z + tip.z) * 0.5)
+    let left: V3 = v3(mid.x - width, mid.y, mid.z)
+    let right: V3 = v3(mid.x + width, mid.y, mid.z)
+    let n: V3 = v3(0.0, 1.0, 0.0)
+    let a: i32 = r3d_mesh_vertex(root, n, leaf)
+    let b: i32 = r3d_mesh_vertex(tip, n, leaf)
+    let c: i32 = r3d_mesh_vertex(left, n, leaf)
+    let d: i32 = r3d_mesh_vertex(right, n, leaf)
+    let e: i32 = r3d_mesh_vertex(v3(mid.x, mid.y + width * 0.21, mid.z),
+                                  n, v3(leaf.x * 1.07, leaf.y * 1.10, leaf.z))
+    let t0: bool = r3d_mesh_tri(a, c, e)
+    let t1: bool = r3d_mesh_tri(c, b, e)
+    let t2: bool = r3d_mesh_tri(a, e, d)
+    let t3: bool = r3d_mesh_tri(e, b, d)
+}
+
+# Build a compact deterministic organ mesh when the ecology changes. The
+# terrain remains the first 2048 triangles. No camera-frame re-tessellation.
+# Per-species budgets keep the combined mesh beneath the rasterizer limits.
+function append_garden_organs(plant: ptr<i32>, age: ptr<i32>,
+                              food: ptr<f32>, wet: ptr<f32>,
+                              ga: ptr<u32>, gb: ptr<u32>,
+                              heights: ptr<f32>) -> void {
+    for y in 0 to MAP {
+        for x in 0 to MAP {
+            let i: i32 = y * MAP + x
+            let species: i32 = plant[i]
+            # A repeatable subset is meshed; remaining plants continue to
+            # use the fast sprite/line LOD path.
+            if species > 0 and hash_xy(x, y) % 4 == 0 {
+                let size: f32 = gene_value(ga[i], gb[i], 8)
+                let branch: f32 = gene_value(ga[i], gb[i], 16)
+                let maturity: f32 = r3d_clampf((age[i] as f32) /
+                                   (14.0 + 22.0 * size), 0.18, 1.0)
+                let vigor: f32 = r3d_clampf(0.34 + food[i] * 0.38 +
+                                   wet[i] * 0.28, 0.24, 1.0)
+                let growth: f32 = maturity * vigor
+                let fx: f32 = (x as f32) - 31.5
+                let fz: f32 = (y as f32) - 31.5
+                let base: V3 = v3(fx, heights[i] + 0.04, fz)
+                let mut tall: f32 = (0.70 + size) * growth
+                if species == 4 { tall = (1.6 + 2.04 * size) * growth }
+                let tip: V3 = v3(fx, base.y + tall, fz)
+                if species == 4 {
+                    append_tapered_wood(base, tip,
+                                        0.055 + 0.045 * size,
+                                        v3(0.39, 0.29, 0.19))
+                    let count: i32 = 2 + (branch * 3.0) as i32
+                    for b in 0 to count {
+                        let dir: f32 = if b % 2 == 0 { -1.0 } else { 1.0 }
+                        let elev: f32 = 0.40 + (b as f32) * 0.10
+                        let node: V3 = v3(fx, base.y + tall * elev, fz)
+                        let endpoint: V3 = v3(fx + dir * (0.32 + 0.25 * branch),
+                              base.y + tall * (elev + 0.13),
+                              fz + (if b % 3 == 0 { 0.31 } else { -0.31 }))
+                        append_tapered_wood(node, endpoint,
+                                            0.025 + 0.018 * size,
+                                            v3(0.36, 0.27, 0.16))
+                        append_leaf_blade(endpoint,
+                            v3(endpoint.x + dir * 0.33,
+                               endpoint.y + 0.10, endpoint.z + 0.16),
+                               0.14 + 0.10 * branch,
+                               v3(0.13, 0.47, 0.20))
+                    }
+                } else if species == 2 or species == 3 {
+                    append_tapered_wood(base, tip, 0.016 + 0.015 * size,
+                                         v3(0.20, 0.43, 0.20))
+                    for b in 0 to 3 {
+                        let side: f32 = if b % 2 == 0 { -1.0 } else { 1.0 }
+                        let p: V3 = v3(fx, base.y + tall *
+                                  (0.32 + (b as f32) * 0.19), fz)
+                        let leaf_end: V3 = v3(fx + side * (0.30 + 0.18 * branch),
+                            p.y + 0.10, fz + 0.20)
+                        append_leaf_blade(p, leaf_end, 0.12 + 0.08 * branch,
+                                          v3(0.16, 0.55, 0.25))
+                    }
+                } else {
+                    for b in 0 to 3 {
+                        let side: f32 = if b % 2 == 0 { -1.0 } else { 1.0 }
+                        append_leaf_blade(base,
+                            v3(fx + side * (0.30 + 0.18 * branch),
+                               base.y + 0.20 * growth,
+                               fz + (b as f32) * 0.16 - 0.25),
+                               0.11 + 0.08 * branch,
+                               v3(0.25, 0.60, 0.29))
+                    }
+                }
+            }
+        }
+    }
+}
+
 # Every shoot is a 3D organism rooted at the exact corresponding 2D cell.
 # No independent JS world or copied vegetation layout exists.
 # Compact deterministic developmental graph:
