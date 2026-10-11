@@ -914,7 +914,8 @@ function append_garden_organs(plant: ptr<i32>, age: ptr<i32>,
                                0.14 + 0.10 * branch,
                                v3(0.13, 0.47, 0.20))
                     }
-                } else if species == 2 or species == 3 {
+                }
+                if species == 2 or species == 3 {
                     append_tapered_wood(base, tip, 0.016 + 0.015 * size,
                                          v3(0.20, 0.43, 0.20))
                     for b in 0 to 3 {
@@ -926,7 +927,8 @@ function append_garden_organs(plant: ptr<i32>, age: ptr<i32>,
                         append_leaf_blade(p, leaf_end, 0.12 + 0.08 * branch,
                                           v3(0.16, 0.55, 0.25))
                     }
-                } else {
+                }
+                if species == 1 {
                     for b in 0 to 3 {
                         let side: f32 = if b % 2 == 0 { -1.0 } else { 1.0 }
                         append_leaf_blade(base,
@@ -1232,6 +1234,7 @@ function main() -> i32 {
     r3d_set_ambient(0.47)
     r3d_set_fog(true, v3(0.58, 0.69, 0.64), 33.0, 110.0)
     build_garden_surface(ground, wet, heights)
+    append_garden_organs(plant, age, food, wet, genes_a, genes_b, heights)
     let projection: array<f32, 16> = [0.0, 0.0, 0.0, 0.0]
     let model: array<f32, 16> = [0.0, 0.0, 0.0, 0.0]
     let view: array<f32, 16> = [0.0, 0.0, 0.0, 0.0]
@@ -1276,6 +1279,7 @@ function main() -> i32 {
     # software triangle/sprite rasterization on all unchanged frames.
     let mut rendered_2d_epoch: i32 = -1
     let mut rendered_epoch: i32 = -1
+    let mut meshed_epoch: i32 = epoch
     let mut rendered_x: f32 = 10000.0
     let mut rendered_z: f32 = 10000.0
     let mut rendered_y: f32 = 10000.0
@@ -1440,6 +1444,8 @@ function main() -> i32 {
                 seed = next_random()
                 reset_world(seed, ground, wet, food, plant, age, genes_a, genes_b)
                 build_garden_surface(ground, wet, heights)
+                append_garden_organs(plant, age, food, wet, genes_a, genes_b, heights)
+                meshed_epoch = epoch
                 rendered_epoch = -1
                 rendered_2d_epoch = -1
             }
@@ -1466,6 +1472,7 @@ function main() -> i32 {
                     genes_a[cell] = founder_chromosome()
                     genes_b[cell] = founder_chromosome()
                     rendered_2d_epoch = -1
+                    meshed_epoch = -100
                 }
                 if mouse.right != 0 and plant[cell] != 0 {
                     plant[cell] = 0
@@ -1482,6 +1489,13 @@ function main() -> i32 {
                            genes_a, genes_b, genes_a_next, genes_b_next, weather)
         }
 
+        # Organ topology only changes after biological updates, not camera
+        # rotations. Rebuild every six ecological steps to amortise work.
+        if show3d and epoch - meshed_epoch >= 6 {
+            build_garden_surface(ground, wet, heights)
+            append_garden_organs(plant, age, food, wet, genes_a, genes_b, heights)
+            meshed_epoch = epoch
+        }
         gfx_clear(g, 13, 23, 21)
         if show3d {
             let camera_changed: bool =
