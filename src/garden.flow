@@ -37,7 +37,9 @@ const FIELD_X: i32 = 20
 const FIELD_Y: i32 = 90
 const WIN_W: i32 = 742
 const WIN_H: i32 = 660
-const MAX_FRAMES: i32 = 24000
+# Keep the world alive while the viewer is open (the previous 24,000-frame
+# cap silently stopped the simulation after about 6 minutes 40 seconds).
+const MAX_FRAMES: i32 = 2000000000
 
 const KEY_1: i32 = 18
 const KEY_2: i32 = 19
@@ -1048,6 +1050,7 @@ function main() -> i32 {
     let mut rendered_orbit: bool = false
     m4_identity(p_model)
     let mut frame: i32 = 0
+    let mut last_painted_cell: i32 = -1
 
     while frame < MAX_FRAMES {
         if !gfx_frame_pump(g) { break }
@@ -1204,13 +1207,17 @@ function main() -> i32 {
             key_r_held = false
         }
 
+        if mouse.left == 0 { last_painted_cell = -1 }
         let mx: i32 = (mouse.x - FIELD_X) / TILE
         let my: i32 = (mouse.y - FIELD_Y) / TILE
         if !show3d and mouse.inside != 0 and mouse.x >= FIELD_X and mouse.y >= FIELD_Y
            and mx >= 0 and mx < MAP and my >= 0 and my < MAP {
             let cell: i32 = my * MAP + mx
             if ground[cell] == 0 {
-                if mouse.left != 0 {
+                if mouse.left != 0 and last_painted_cell != cell {
+                    # One intentional planting event per visited cell; holding
+                    # a click must not regenerate a new genotype every frame.
+                    last_painted_cell = cell
                     cam_x = (mx as f32) - 31.5
                     cam_z = (my as f32) - 31.5
                     plant[cell] = brush
@@ -1219,7 +1226,7 @@ function main() -> i32 {
                     genes_b[cell] = founder_chromosome()
                     rendered_2d_epoch = -1
                 }
-                if mouse.right != 0 {
+                if mouse.right != 0 and plant[cell] != 0 {
                     plant[cell] = 0
                     age[cell] = 0
                     genes_a[cell] = 0
