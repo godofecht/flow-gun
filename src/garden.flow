@@ -919,7 +919,8 @@ function paint_living_3d(vp: &[f32], plant: ptr<i32>, age: ptr<i32>,
                                     bark)
                             }
                         }
-                    } else if close and (kind == 2 or kind == 3) {
+                    }
+                    if close and (kind == 2 or kind == 3) {
                         r3d_line3(vp, base, crown, v3(0.30, 0.39, 0.20))
                     }
                     # At distance one crown, not a bundle of tiny sprites.
