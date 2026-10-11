@@ -92,7 +92,17 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "deploy: mirror verified WASM garden for branch-based Pages"
-            git push origin HEAD:main
+            # Documentation or CI commits can land during WebAssembly compilation.
+            # Rebase this generated-site commit onto the current branch tip.
+            # Never force-push; fail if files genuinely conflict.
+            for attempt in 1 2 3; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then
+                break
+              fi
+              if [ "$attempt" = 3 ]; then exit 1; fi
+            done
           fi
       - name: Upload browser screenshot
         if: always()
