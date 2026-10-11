@@ -15,6 +15,9 @@ const pause = document.getElementById("pause");
 const reseed = document.getElementById("reseed");
 const expand = document.getElementById("fullscreen");
 const stage = document.getElementById("stage-screen");
+const engineFailure = document.getElementById("engine-failure");
+const engineErrorMessage = document.getElementById("engine-error-message");
+const engineRetry = document.getElementById("engine-retry");
 const weatherControls = [...document.querySelectorAll("[data-weather]")];
 const speciesControls = [...document.querySelectorAll("[data-species]")];
 
@@ -96,17 +99,37 @@ function measureFps(version, beforeFrames, beforeTime) {
   }, 1000);
 }
 
+function showRuntimeFailure(reason) {
+  ready = false;
+  if (engineFailure) engineFailure.hidden = false;
+  if (engineErrorMessage) engineErrorMessage.textContent = reason;
+  syncControls();
+  if (status) status.textContent = "● ENGINE ERROR — RETRY TO RESTART";
+}
+
 function monitorReady(version, attempt) {
   if (version !== loadVersion) return;
   const win = getEngine();
   if (win && win.flowGfx.frames > 0) {
     ready = true;
+    if (engineFailure) engineFailure.hidden = true;
     syncControls();
     measureFps(version, win.flowGfx.frames, performance.now());
-  } else if (attempt < 240) {
-    window.setTimeout(() => monitorReady(version, attempt + 1), 150);
-  } else if (status) {
-    status.textContent = "WEBASSEMBLY NOT READY — RESTART TO RETRY";
+  } else {
+    let failureText = "";
+    try {
+      const embeddedStatus = frame.contentWindow.document.querySelector("#status")?.textContent || "";
+      if (/fail|error|finished/i.test(embeddedStatus)) {
+        failureText = frame.contentWindow.document.querySelector("#out")?.textContent?.slice(-300) || embeddedStatus;
+      }
+    } catch (error) { failureText = "Unable to inspect the embedded runtime."; }
+    if (failureText) {
+      showRuntimeFailure(failureText);
+    } else if (attempt < 120) {
+      window.setTimeout(() => monitorReady(version, attempt + 1), 150);
+    } else {
+      showRuntimeFailure("The WebAssembly canvas did not produce a frame within 18 seconds. Retry, or open the standalone viewer.");
+    }
   }
 }
 
@@ -135,6 +158,7 @@ function awaitStart() {
   weather = 0;
   brush = 2;
   const version = ++loadVersion;
+  if (engineFailure) engineFailure.hidden = true;
   syncControls();
   try {
     const win = frame.contentWindow;
@@ -147,11 +171,16 @@ function awaitStart() {
 
 frame?.addEventListener("load", awaitStart);
 
-restart?.addEventListener("click", () => {
+function restartEngine() {
   ready = false;
+  if (engineFailure) engineFailure.hidden = true;
   syncControls();
-  frame.src = new URL("./garden/index.html?autostart=1", location.href).href;
-});
+  const url = new URL("./garden/index.html?autostart=1", location.href);
+  url.searchParams.set("reload", String(Date.now()));
+  frame.src = url.href;
+}
+restart?.addEventListener("click", restartEngine);
+engineRetry?.addEventListener("click", restartEngine);
 
 dimension?.addEventListener("click", () => {
   if (!sendFlowKey("Tab", "Tab")) return;
