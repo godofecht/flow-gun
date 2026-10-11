@@ -57,7 +57,7 @@
       <div class="tools-bottom"><span class="live-indicator"></span> DETERMINISTIC WORLD / LOCAL REPRODUCTION</div>
     </aside>
     <section class="stage-panel" aria-label="Live Flow ecosystem">
-      <div class="stage-header"><div class="stage-title"><span class="live-indicator"></span> LIVE ECOSYSTEM <span class="divider-dot">/</span> ONE WORLD, TWO PROJECTIONS</div><span class="wasm-mark">FLOW → WASM</span><button id="fullscreen" type="button" aria-label="Fullscreen garden">⛶ Expand</button></div>
+      <div class="stage-header"><div class="stage-title"><span class="live-indicator"></span> LIVE ECOSYSTEM <span class="divider-dot">/</span> ONE WORLD, TWO PROJECTIONS</div><span class="wasm-mark">FLOW → WASM</span><span id="camera-state" class="camera-state">TOP-DOWN</span><button id="fullscreen" type="button" aria-label="Fullscreen garden">⛶ Expand</button></div>
       <div class="stage-screen" id="stage-screen">
         <iframe id="garden-frame" src="./garden/index.html?autostart=1" title="Flow WebAssembly Garden: 2D planting and interactive 3D exploration" loading="eager" allowfullscreen></iframe>
         <div id="engine-failure" class="engine-failure" role="alert" hidden>
@@ -76,9 +76,22 @@
             <button type="button" data-hold-key="KeyD" aria-label="Move right">→</button>
           </div>
         </div>
+        <div class="camera-touch" id="camera-touch" hidden aria-label="Camera look controls">
+          <div class="camera-touch-title">LOOK</div>
+          <button type="button" data-hold-key="ArrowUp" aria-label="Look up">↑</button>
+          <div class="camera-touch-row">
+            <button type="button" data-hold-key="ArrowLeft" aria-label="Turn left">←</button>
+            <button type="button" data-hold-key="ArrowDown" aria-label="Look down">↓</button>
+            <button type="button" data-hold-key="ArrowRight" aria-label="Turn right">→</button>
+          </div>
+          <div class="camera-zoom-row">
+            <button id="zoom-in" type="button" data-hold-key="KeyQ" aria-label="Zoom camera in">＋</button>
+            <button id="zoom-out" type="button" data-hold-key="KeyE" aria-label="Zoom camera out">－</button>
+          </div>
+        </div>
         <span class="canvas-corner top-left"></span><span class="canvas-corner bottom-right"></span>
       </div>
-      <div class="mobile-actions"><button type="button" id="mobile-pause" aria-pressed="false">Ⅱ Pause</button><button type="button" id="mobile-reset">⟳ Reset</button><span>Touch arrows move in 3D</span></div>
+      <div class="mobile-actions"><button type="button" id="mobile-pause" aria-pressed="false">Ⅱ Pause</button><button type="button" id="mobile-reset">⟳ Reset</button><button type="button" id="mobile-center">◎ Centre</button><span>Move left · Look right</span></div>
       <div class="stage-footer"><span id="garden-runtime" class="runtime-status" role="status" aria-live="polite">○ LOADING FLOW ENGINE…</span><span>Drag · Look <i> / </i> WASD · Move <i> / </i> Wheel · Zoom <i> / </i> F · Sprint</span><button id="restart" type="button" title="Restart Flow WebAssembly process">↻ Reload</button></div>
     </section>
     <aside class="panel science" aria-label="Evolution and morphology">
