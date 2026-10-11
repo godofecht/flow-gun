@@ -25,7 +25,8 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
   page.on('requestfailed', request => errors.push(`${request.url()} ${request.failure()?.errorText}`));
-  await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+  const address = process.env.GARDEN_TEST_URL || `http://127.0.0.1:${port}/`;
+  await page.goto(address, { waitUntil: 'domcontentloaded', timeout: 45000 });
   await page.waitForFunction(() => {
     const win = document.querySelector('#garden-frame')?.contentWindow;
     return win?.flowGfx?.frames > 8 && win.flowGfx.canvas?.getBoundingClientRect().width > 300;
