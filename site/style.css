@@ -11,3 +11,12 @@
 @media(max-width:470px){.tools{flex-wrap:wrap;flex-direction:row;align-items:center}.panel-heading{display:none}.view-buttons button{min-width:85px}.species-buttons button{font-size:0;gap:0;min-width:33px;justify-content:center}.species-buttons .seed{font-size:16px}.stage-header button{font-size:0}.stage-header button::before{content:"⛶";font-size:15px}.climate-buttons button{font-size:0}.climate-buttons button span{font-size:15px}.stage-title{font-size:8px}}
 @media(max-height:780px) and (min-width:761px){.tools{padding-top:10px}.panel-heading{padding-bottom:12px}.control-block{padding:11px 0}.science{gap:12px;padding-top:12px}.locus{padding:8px 1px}.science-heading h2{margin:6px 0}.science-heading p{font-size:11px}.panel-heading h1{font-size:26px;margin:6px 0}.tools-bottom{font-size:8px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+
+/* Recoverable errors appear over the viewport, never behind the iframe. */
+.engine-failure[hidden]{display:none!important}
+.engine-failure{position:absolute;z-index:5;inset:0;display:grid;place-items:center;background:rgba(9,20,14,.92);padding:24px}
+.engine-failure-inner{width:min(440px,100%);padding:25px;background:#1a3224;border:1px solid #9cbf8a;border-radius:12px;text-align:center;box-shadow:0 20px 80px #0008}
+.engine-failure h3{font:400 29px Georgia,serif;margin:0 0 10px;color:#f0edcc}
+.engine-failure p{font-size:12px;color:#b8c5af;line-height:1.7;word-break:break-word}
+.engine-failure button{background:#9acb85;border:0;border-radius:6px;padding:12px 17px;color:#112517;font-weight:700;margin:10px auto}
+.engine-failure a{display:block;color:#cae4c3;text-decoration:underline;font-size:12px;padding:8px}
