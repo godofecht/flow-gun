@@ -73,6 +73,19 @@ try {
     await forward.dispatchEvent('pointerup', { pointerId: 12, pointerType: 'touch', bubbles: true });
     const released = await mobile.evaluate(() => document.querySelector('#garden-frame').contentWindow.flowGfx.keys[13]);
     if (released !== 0) throw new Error('Touch move key remains stuck after release');
+    const look = mobile.locator('[data-hold-key="ArrowRight"]');
+    await look.dispatchEvent('pointerdown', { pointerId: 16, pointerType: 'touch', bubbles: true });
+    const looking = await mobile.evaluate(() => document.querySelector('#garden-frame').contentWindow.flowGfx.keys[124]);
+    if (looking !== 1) throw new Error('Mobile camera look control did not hold ArrowRight');
+    await look.dispatchEvent('pointerup', { pointerId: 16, pointerType: 'touch', bubbles: true });
+    const lookReleased = await mobile.evaluate(() => document.querySelector('#garden-frame').contentWindow.flowGfx.keys[124]);
+    if (lookReleased !== 0) throw new Error('Camera look control stuck after finger release');
+    if (await mobile.locator('#camera-state').textContent() !== 'ORBIT CAMERA') {
+      throw new Error('Camera status did not reflect orbit view');
+    }
+    if (!(await mobile.locator('#mobile-center').isEnabled())) {
+      throw new Error('Camera recenter not accessible on mobile');
+    }
     await mobile.locator('#mobile-pause').click();
     if (await mobile.locator('#mobile-pause').getAttribute('aria-pressed') !== 'true') {
       throw new Error('Mobile pause control failed');
