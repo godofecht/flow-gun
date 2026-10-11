@@ -21,6 +21,11 @@ const engineRetry = document.getElementById("engine-retry");
 const mobilePause = document.getElementById("mobile-pause");
 const mobileReset = document.getElementById("mobile-reset");
 const touchPad = document.getElementById("touch-pad");
+const cameraTouch = document.getElementById("camera-touch");
+const cameraState = document.getElementById("camera-state");
+const mobileCenter = document.getElementById("mobile-center");
+const zoomIn = document.getElementById("zoom-in");
+const zoomOut = document.getElementById("zoom-out");
 const holdButtons = [...document.querySelectorAll("[data-hold-key]")];
 const weatherControls = [...document.querySelectorAll("[data-weather]")];
 const speciesControls = [...document.querySelectorAll("[data-species]")];
@@ -58,6 +63,11 @@ function syncControls() {
   }
   if (mobileReset) mobileReset.disabled = !ready;
   if (touchPad) touchPad.hidden = !ready || !in3D;
+  if (cameraTouch) cameraTouch.hidden = !ready || !in3D;
+  if (cameraState) cameraState.textContent = !in3D ? "TOP-DOWN" : walking ? "WALK CAMERA" : "ORBIT CAMERA";
+  if (mobileCenter) mobileCenter.disabled = !ready || !in3D;
+  if (zoomIn) zoomIn.hidden = walking;
+  if (zoomOut) zoomOut.hidden = walking;
   if (reseed) reseed.disabled = !ready;
   for (const btn of weatherControls) {
     btn.disabled = !ready;
@@ -169,7 +179,10 @@ function bindKeyboardChanges(win) {
   // genuine keyboard input, without double-counting our synthetic buttons.
   win.addEventListener("keydown", (event) => {
     if (!event.isTrusted || event.repeat) return;
-    if (event.code === "Tab") in3D = !in3D;
+    if (event.code === "Tab") {
+      in3D = !in3D;
+      if (!in3D) releaseMovement();
+    }
     if (event.code === "KeyV" && in3D) walking = !walking;
     if (event.code === "KeyP") paused = !paused;
     const climates = in3D ? ["KeyX","KeyZ","KeyC"] : ["KeyS","KeyW","KeyD"];
@@ -232,9 +245,11 @@ mode?.addEventListener("click", () => {
   syncControls();
 });
 
-reset?.addEventListener("click", () => {
+function recenterCamera() {
   if (in3D) sendFlowKey("Space", " ");
-});
+}
+reset?.addEventListener("click", recenterCamera);
+mobileCenter?.addEventListener("click", recenterCamera);
 
 syncControls();
 
@@ -274,7 +289,11 @@ mobilePause?.addEventListener("click", togglePause);
 reseed?.addEventListener("click", resetGarden);
 mobileReset?.addEventListener("click", resetGarden);
 
-const movementCodes = { KeyW: 13, KeyA: 0, KeyS: 1, KeyD: 2 };
+const movementCodes = {
+  KeyW: 13, KeyA: 0, KeyS: 1, KeyD: 2,
+  ArrowLeft: 123, ArrowRight: 124, ArrowDown: 125, ArrowUp: 126,
+  KeyQ: 12, KeyE: 14
+};
 const heldKeys = new Set();
 function holdMove(code, isDown) {
   const win = getEngine();
