@@ -99,7 +99,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: flow-garden-browser-render
-          path: /tmp/flow-garden-browser-smoke.png
+          path: |
+            /tmp/flow-garden-browser-smoke.png
+            /tmp/flow-garden-mobile-smoke.png
           if-no-files-found: ignore
       - name: Upload site preview
         uses: actions/upload-artifact@v4
@@ -136,5 +138,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: flow-garden-public-live-proof
-          path: /tmp/flow-garden-browser-smoke.png
+          path: |
+            /tmp/flow-garden-browser-smoke.png
+            /tmp/flow-garden-mobile-smoke.png
           if-no-files-found: ignore
