@@ -19,7 +19,7 @@ concurrency:
 jobs:
   build:
     permissions:
-      contents: read
+      contents: write
       pages: write
     outputs:
       pages_ready: ${{ steps.pages-config.outcome == 'success' }}
@@ -57,7 +57,7 @@ jobs:
           page = Path("dist/garden/index.html")
           html = page.read_text()
           assert "</head>" in html
-          html = html.replace("</head>", '<link rel="stylesheet" href="../embed.css"></head>')
+          html = html.replace("</head>", '<link rel="stylesheet" href="../embed.css?v=visible-canvas-2"></head>')
           page.write_text(html)
           PY
       - name: Prepare website
@@ -71,6 +71,23 @@ jobs:
         run: |
           npm install --no-save --ignore-scripts playwright-core@1.55.1
           node scripts/smoke-browser.mjs
+      - name: Mirror the verified site for branch-based Pages
+        continue-on-error: true
+        run: |
+          # The repository also has a legacy branch-based Pages publisher.
+          # Mirroring prevents it from replacing the live WASM app with a
+          # README-only Jekyll site after later repository updates.
+          mkdir -p garden
+          cp dist/index.html dist/site.js dist/style.css dist/embed.css dist/flower.svg ./
+          cp dist/garden/index.html dist/garden/garden.js dist/garden/garden.wasm garden/
+          cp dist/.nojekyll ./
+          git add -f .nojekyll index.html site.js style.css embed.css flower.svg garden/index.html garden/garden.js garden/garden.wasm
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "deploy: mirror verified WASM garden for branch-based Pages"
+            git push origin HEAD:main
+          fi
       - name: Upload browser screenshot
         if: always()
         uses: actions/upload-artifact@v4
