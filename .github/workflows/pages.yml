@@ -125,3 +125,33 @@ jobs:
       - name: Publish
         id: publish
         uses: actions/deploy-pages@v4
+
+  verify-live:
+    needs: deploy
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out browser smoke script
+        uses: actions/checkout@v4
+      - name: Install browser smoke dependency
+        run: npm install --no-save --ignore-scripts playwright-core@1.55.1
+      - name: Verify actual public GitHub Pages is live and visible
+        env:
+          GARDEN_TEST_URL: https://godofecht.github.io/flow-gun/?smoke=${{ github.run_id }}
+        run: |
+          for attempt in 1 2 3 4; do
+            if node scripts/smoke-browser.mjs; then
+              exit 0
+            fi
+            echo "Public Pages not yet ready on attempt $attempt; retrying after CDN propagation..."
+            sleep 20
+          done
+          exit 1
+      - name: Upload public browser screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-garden-public-live-proof
+          path: /tmp/flow-garden-browser-smoke.png
+          if-no-files-found: ignore
