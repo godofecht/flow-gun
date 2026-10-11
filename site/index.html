@@ -60,6 +60,14 @@
       <div class="stage-header"><div class="stage-title"><span class="live-indicator"></span> LIVE ECOSYSTEM <span class="divider-dot">/</span> ONE WORLD, TWO PROJECTIONS</div><span class="wasm-mark">FLOW → WASM</span><button id="fullscreen" type="button" aria-label="Fullscreen garden">⛶ Expand</button></div>
       <div class="stage-screen" id="stage-screen">
         <iframe id="garden-frame" src="./garden/index.html?autostart=1" title="Flow WebAssembly Garden: 2D planting and interactive 3D exploration" loading="eager" allowfullscreen></iframe>
+        <div id="engine-failure" class="engine-failure" role="alert" hidden>
+          <div class="engine-failure-inner">
+            <h3>Garden failed to start</h3>
+            <p id="engine-error-message">The Flow WebAssembly runtime could not draw its first frame.</p>
+            <button id="engine-retry" type="button">↻ Retry loading garden</button>
+            <a href="./garden/index.html?autostart=1" target="_blank" rel="noopener">Open the viewer separately ↗</a>
+          </div>
+        </div>
         <span class="canvas-corner top-left"></span><span class="canvas-corner bottom-right"></span>
       </div>
       <div class="stage-footer"><span id="garden-runtime" class="runtime-status" role="status" aria-live="polite">○ LOADING FLOW ENGINE…</span><span>Drag · Look <i> / </i> WASD · Move <i> / </i> Wheel · Zoom <i> / </i> F · Sprint</span><button id="restart" type="button" title="Restart Flow WebAssembly process">↻ Reload</button></div>
