@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1713">
+  <meta name="description" content="Flow Garden: a real-time genetic and morphogenetic ecosystem, simulated and rendered in Flow WebAssembly.">
+  <title>Flow Garden · Living Evolution Lab</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./site.js" defer></script>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Flow Garden home"><span class="brand-icon">✳</span><strong>FLOW <span>GARDEN</span></strong></a>
+    <span class="edition">MORPHOGENESIS STUDIO <i>•</i> WEBASSEMBLY</span>
+    <nav aria-label="Project">
+      <a href="https://github.com/godofecht/flow-gun" target="_blank" rel="noopener">Source ↗</a>
+      <a href="./garden/index.html?autostart=1" target="_blank" rel="noopener">Native viewer ↗</a>
+    </nav>
+  </header>
+  <main class="workspace">
+    <aside class="panel tools" aria-label="Garden controls">
+      <div class="panel-heading"><span class="eyebrow">01 / EXPERIMENT</span><h1>Living garden<span class="accent">.</span></h1><p>Shape the environment. Let evolution shape what survives.</p></div>
+      <section class="control-block">
+        <h2>Perspective <small>Tab / V</small></h2>
+        <div class="view-buttons">
+          <button id="toggle-dimension" aria-pressed="false" type="button">↗ Enter 3D <kbd>TAB</kbd></button>
+          <button id="camera-mode" aria-pressed="false" type="button">◉ Orbit mode <kbd>V</kbd></button>
+        </div>
+        <button class="subtle-button" id="camera-reset" type="button">↺ Centre camera <kbd>SPACE</kbd></button>
+      </section>
+      <section class="control-block">
+        <h2>Climate <small>selection pressure</small></h2>
+        <div class="choice-grid climate-buttons" role="group" aria-label="Weather">
+          <button data-weather="0" aria-pressed="true" title="Normal rainfall" type="button"><span>☀</span> Mild</button>
+          <button data-weather="1" aria-pressed="false" title="Heavy rainfall" type="button"><span>☂</span> Rain</button>
+          <button data-weather="2" aria-pressed="false" title="Extended drought" type="button"><span>◌</span> Dry</button>
+        </div>
+      </section>
+      <section class="control-block">
+        <h2>Introduce species <small>1–4</small></h2>
+        <div class="species-buttons" role="group" aria-label="Species to plant">
+          <button data-species="1" type="button" aria-pressed="false"><span class="seed clover">✤</span>Clover <kbd>1</kbd></button>
+          <button data-species="2" type="button" aria-pressed="true"><span class="seed flower">✿</span>Flowers <kbd>2</kbd></button>
+          <button data-species="3" type="button" aria-pressed="false"><span class="seed fern">❧</span>Ferns <kbd>3</kbd></button>
+          <button data-species="4" type="button" aria-pressed="false"><span class="seed shrub">♣</span>Shrubs <kbd>4</kbd></button>
+        </div>
+        <p class="tiny-note">Paint in 2D to introduce a new diploid genotype. Right-click to clear.</p>
+      </section>
+      <section class="control-block runtime-buttons">
+        <div class="action-grid">
+          <button id="pause" type="button" aria-pressed="false">Ⅱ Pause <kbd>P</kbd></button>
+          <button id="reseed" type="button">⟳ New world <kbd>R</kbd></button>
+        </div>
+      </section>
+      <div class="tools-bottom"><span class="live-indicator"></span> DETERMINISTIC WORLD / LOCAL REPRODUCTION</div>
+    </aside>
+    <section class="stage-panel" aria-label="Live Flow ecosystem">
+      <div class="stage-header"><div class="stage-title"><span class="live-indicator"></span> LIVE ECOSYSTEM <span class="divider-dot">/</span> ONE WORLD, TWO PROJECTIONS</div><span class="wasm-mark">FLOW → WASM</span><button id="fullscreen" type="button" aria-label="Fullscreen garden">⛶ Expand</button></div>
+      <div class="stage-screen" id="stage-screen">
+        <iframe id="garden-frame" src="./garden/index.html?autostart=1" title="Flow WebAssembly Garden: 2D planting and interactive 3D exploration" loading="eager" allowfullscreen></iframe>
+        <div id="engine-failure" class="engine-failure" role="alert" hidden>
+          <div class="engine-failure-inner">
+            <h3>Garden failed to start</h3>
+            <p id="engine-error-message">The Flow WebAssembly runtime could not draw its first frame.</p>
+            <button id="engine-retry" type="button">↻ Retry loading garden</button>
+            <a href="./garden/index.html?autostart=1" target="_blank" rel="noopener">Open the viewer separately ↗</a>
+          </div>
+        </div>
+        <span class="canvas-corner top-left"></span><span class="canvas-corner bottom-right"></span>
+      </div>
+      <div class="stage-footer"><span id="garden-runtime" class="runtime-status" role="status" aria-live="polite">○ LOADING FLOW ENGINE…</span><span>Drag · Look <i> / </i> WASD · Move <i> / </i> Wheel · Zoom <i> / </i> F · Sprint</span><button id="restart" type="button" title="Restart Flow WebAssembly process">↻ Reload</button></div>
+    </section>
+    <aside class="panel science" aria-label="Evolution and morphology">
+      <div class="science-heading"><span class="eyebrow">02 / EVOLUTION ENGINE</span><h2>Life has a <em>genotype.</em></h2><p>Not a predetermined arrangement of decorative flowers.</p></div>
+      <div class="dna-card" aria-label="Diploid genome of four quantitative loci">
+        <div class="dna-title"><span>GENOME <strong>2 × 4 LOCI</strong></span><span class="tiny-pill">DIPLOID</span></div>
+        <div class="locus"><div><b>01</b><strong>Water optimum</strong><small>Local ecological fitness</small></div><span class="locus-mark water"></span></div>
+        <div class="locus"><div><b>02</b><strong>Internode length</strong><small>Height &amp; maturation</small></div><span class="locus-mark height"></span></div>
+        <div class="locus"><div><b>03</b><strong>Branch allocation</strong><small>Canopy vs. reproduction</small></div><span class="locus-mark branch"></span></div>
+        <div class="locus"><div><b>04</b><strong>Petal pigments</strong><small>Inheritable colour morphs</small></div><span class="locus-mark pigment"></span></div>
+      </div>
+      <div class="evolution-flow"><div class="flow-name">LOCAL GENE FLOW</div><div class="flow-diagram"><span>parent A</span><b>⨯</b><span>parent B</span><b>→</b><span>offspring</span></div><p>Alleles segregate, occasionally mutate, and produce offspring whose phenotype also responds to soil moisture, nutrients, light and age.</p></div>
+      <details class="model-details"><summary>Model assumptions <span>+</span></summary><p>A small computational evo-devo model, not a molecular or botanically calibrated simulator. Four quantitative loci are independently assorted into haploid gametes, then paired into a diploid offspring. Conspecific neighbours may contribute pollen; otherwise selfing occurs. Mutation is stochastic and rare. Resource-dependent organ growth creates phenotypic plasticity.</p></details>
+      <div class="science-bottom"><span>64 × 64 CELLS</span><span>HERITABLE VARIATION</span></div>
+    </aside>
+  </main>
+  <footer class="mobile-help">Click the simulation to use keyboard controls · 2D planting / 3D exploration · <a href="https://github.com/godofecht/flow-gun">Source ↗</a></footer>
+</div>
+</body>
+</html>
