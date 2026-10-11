@@ -1134,12 +1134,12 @@ function main() -> i32 {
     let mut v_held: bool = false
     let mut space_held: bool = false
     let mut cam_x: f32 = 0.0
-    let mut cam_z: f32 = 13.0
+    let mut cam_z: f32 = 0.0
     let mut cam_y: f32 = 2.0
     let mut yaw: f32 = 0.0
-    let mut pitch: f32 = -0.57
-    let mut zoom: f32 = 27.0
-    let mut zoom_goal: f32 = 27.0
+    let mut pitch: f32 = -0.72
+    let mut zoom: f32 = 35.0
+    let mut zoom_goal: f32 = 35.0
     let mut fov: f32 = 65.0
     let mut vx: f32 = 0.0
     let mut vz: f32 = 0.0
@@ -1191,7 +1191,7 @@ function main() -> i32 {
             orbit = !orbit
             vx = 0.0
             vz = 0.0
-            pitch = if orbit { -0.57 } else { -0.13 }
+            pitch = if orbit { -0.72 } else { -0.13 }
             was_dragging = false
         }
         v_held = v_now
@@ -1226,8 +1226,10 @@ function main() -> i32 {
             if dragging and was_dragging {
                 let dx: f32 = r3d_clampf((mouse.x - last_x) as f32, -60.0, 60.0)
                 let dy: f32 = r3d_clampf((mouse.y - last_y) as f32, -60.0, 60.0)
-                yaw = yaw - dx * 0.0045
-                pitch = pitch - dy * 0.0040
+                # A fine-grained orbit sensitivity avoids overshooting when
+                # dragging near a flower, while retaining quick full pans.
+                yaw = yaw - dx * 0.0037
+                pitch = pitch - dy * 0.0033
             }
             was_dragging = dragging
             last_x = mouse.x
@@ -1245,21 +1247,24 @@ function main() -> i32 {
             previous_wheel = mouse.wheel
             if wheel_delta != 0 {
                 if orbit {
-                    zoom_goal = r3d_clampf(zoom_goal + (wheel_delta as f32) * 2.6,
-                                           5.0, 78.0)
+                    # Dolly speed scales with viewing distance so close-up
+                    # adjustments are precise and map-wide zoom is fast.
+                    zoom_goal = r3d_clampf(zoom_goal + (wheel_delta as f32) *
+                                           r3d_clampf(zoom_goal * 0.11, 0.55, 5.5),
+                                           4.0, 78.0)
                 } else {
                     fov = r3d_clampf(fov + (wheel_delta as f32) * 1.7, 47.0, 85.0)
                 }
             }
             if orbit {
                 if gfx_key_down(g, KEY_Q) {
-                    zoom_goal = r3d_clampf(zoom_goal - 18.0 * dt, 5.0, 78.0)
+                    zoom_goal = r3d_clampf(zoom_goal - 18.0 * dt, 4.0, 78.0)
                 }
                 if gfx_key_down(g, KEY_E) {
-                    zoom_goal = r3d_clampf(zoom_goal + 18.0 * dt, 5.0, 78.0)
+                    zoom_goal = r3d_clampf(zoom_goal + 18.0 * dt, 4.0, 78.0)
                 }
             }
-            zoom = zoom + (zoom_goal - zoom) * r3d_clampf(9.0 * dt, 0.0, 1.0)
+            zoom = zoom + (zoom_goal - zoom) * r3d_clampf(7.0 * dt, 0.0, 1.0)
 
             let fwd: V3 = r3d_forward(yaw, 0.0)
             let right: V3 = r3d_right(yaw)
