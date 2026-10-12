@@ -824,42 +824,61 @@ function verify_gene_compiler() -> bool {
 # are diamond-shaped in world space with a raised midrib, not flat sprites.
 function append_tapered_wood(base: V3, tip: V3, thick: f32,
                             colour: V3) -> void {
-    let narrow: f32 = thick * 0.37
-    let a: i32 = r3d_mesh_vertex(v3(base.x - thick, base.y, base.z),
-                                 v3(-1.0, 0.0, 0.0), colour)
-    let b: i32 = r3d_mesh_vertex(v3(base.x + thick, base.y, base.z),
-                                 v3(1.0, 0.0, 0.0), colour)
-    let c: i32 = r3d_mesh_vertex(v3(tip.x - narrow, tip.y, tip.z),
-                                 v3(-1.0, 0.4, 0.0), colour)
-    let d: i32 = r3d_mesh_vertex(v3(tip.x + narrow, tip.y, tip.z),
-                                 v3(1.0, 0.4, 0.0), colour)
-    let e: i32 = r3d_mesh_vertex(v3(base.x, base.y, base.z - thick),
-                                 v3(0.0, 0.0, -1.0), colour)
-    let g: i32 = r3d_mesh_vertex(v3(base.x, base.y, base.z + thick),
-                                 v3(0.0, 0.0, 1.0), colour)
-    let h: i32 = r3d_mesh_vertex(v3(tip.x, tip.y, tip.z - narrow),
-                                 v3(0.0, 0.4, -1.0), colour)
-    let k: i32 = r3d_mesh_vertex(v3(tip.x, tip.y, tip.z + narrow),
-                                 v3(0.0, 0.4, 1.0), colour)
-    let t0: bool = r3d_mesh_tri(a, b, c)
-    let t1: bool = r3d_mesh_tri(c, b, d)
-    let t2: bool = r3d_mesh_tri(e, g, h)
-    let t3: bool = r3d_mesh_tri(h, g, k)
+    # Four-sided tapered tube aligned to *any* branch direction.
+    # A stable orthonormal frame prevents lateral branches from appearing
+    # as upright ribbons. Eight vertices / eight triangles per internode.
+    let axis: V3 = v3_norm(v3_sub(tip, base))
+    let reference: V3 = if abs32(axis.y) > 0.91 {
+        v3(1.0, 0.0, 0.0)
+    } else { v3(0.0, 1.0, 0.0) }
+    let side: V3 = v3_norm(v3_cross(axis, reference))
+    let binormal: V3 = v3_norm(v3_cross(axis, side))
+    let r0: f32 = thick
+    let r1: f32 = thick * 0.43
+    let mut previous_a: i32 = -1
+    let mut previous_b: i32 = -1
+    let mut first_a: i32 = -1
+    let mut first_b: i32 = -1
+    for face in 0 to 4 {
+        let mut radial: V3 = side
+        if face == 1 { radial = binormal }
+        if face == 2 { radial = v3_neg(side) }
+        if face == 3 { radial = v3_neg(binormal) }
+        let a: i32 = r3d_mesh_vertex(v3_add(base, v3_scale(radial, r0)),
+                                     radial, colour)
+        let b: i32 = r3d_mesh_vertex(v3_add(tip, v3_scale(radial, r1)),
+                                     radial, colour)
+        if face == 0 { first_a = a; first_b = b }
+        if previous_a >= 0 {
+            let t0: bool = r3d_mesh_tri(previous_a, a, previous_b)
+            let t1: bool = r3d_mesh_tri(previous_b, a, b)
+        }
+        previous_a = a
+        previous_b = b
+    }
+    let t2: bool = r3d_mesh_tri(previous_a, first_a, previous_b)
+    let t3: bool = r3d_mesh_tri(previous_b, first_a, first_b)
 }
 
 function append_leaf_blade(root: V3, tip: V3, width: f32, leaf: V3) -> void {
-    let mid: V3 = v3((root.x + tip.x) * 0.5,
-                      (root.y + tip.y) * 0.5 + width * 0.18,
-                      (root.z + tip.z) * 0.5)
-    let left: V3 = v3(mid.x - width, mid.y, mid.z)
-    let right: V3 = v3(mid.x + width, mid.y, mid.z)
-    let n: V3 = v3(0.0, 1.0, 0.0)
+    # Blade grows along its petiole. Its lateral direction is perpendicular
+    # to the growth axis, not hard-coded to world X.
+    let axis: V3 = v3_norm(v3_sub(tip, root))
+    let mut side: V3 = v3_cross(axis, v3(0.0, 1.0, 0.0))
+    if v3_len2(side) < 0.001 { side = v3_cross(axis, v3(1.0, 0.0, 0.0)) }
+    side = v3_norm(side)
+    let upper: V3 = v3_norm(v3_cross(side, axis))
+    let middle: V3 = v3_lerp(root, tip, 0.53)
+    let left: V3 = v3_add(middle, v3_scale(side, width))
+    let right: V3 = v3_sub(middle, v3_scale(side, width))
+    let ridge: V3 = v3_add(middle, v3_scale(upper, width * 0.23))
+    let n: V3 = upper
     let a: i32 = r3d_mesh_vertex(root, n, leaf)
     let b: i32 = r3d_mesh_vertex(tip, n, leaf)
     let c: i32 = r3d_mesh_vertex(left, n, leaf)
     let d: i32 = r3d_mesh_vertex(right, n, leaf)
-    let e: i32 = r3d_mesh_vertex(v3(mid.x, mid.y + width * 0.21, mid.z),
-                                  n, v3(leaf.x * 1.07, leaf.y * 1.10, leaf.z))
+    let e: i32 = r3d_mesh_vertex(ridge, n,
+                                  v3(leaf.x * 1.07, leaf.y * 1.10, leaf.z))
     let t0: bool = r3d_mesh_tri(a, c, e)
     let t1: bool = r3d_mesh_tri(c, b, e)
     let t2: bool = r3d_mesh_tri(a, e, d)
@@ -879,7 +898,10 @@ function append_garden_organs(plant: ptr<i32>, age: ptr<i32>,
             let species: i32 = plant[i]
             # A repeatable subset is meshed; remaining plants continue to
             # use the fast sprite/line LOD path.
-            if species > 0 and hash_xy(x, y) % 4 == 0 {
+            # Reserve terrain and headroom; do not silently overflow
+            # the Flow rasterizer's fixed 16k-vertex / 24k-triangle arena.
+            if species > 0 and hash_xy(x, y) % 4 == 0 and
+               r3d_mesh_verts() < 15600 and r3d_mesh_tris() < 23500 {
                 let size: f32 = gene_value(ga[i], gb[i], 8)
                 let branch: f32 = gene_value(ga[i], gb[i], 16)
                 let maturity: f32 = r3d_clampf((age[i] as f32) /
