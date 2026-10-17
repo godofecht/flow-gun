@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'macos/**'
+      - 'src/garden.flow'
+      - 'src/garden_gpu.flow'
       - '.github/workflows/macos-ane.yml'
   pull_request:
     paths:
@@ -44,6 +46,12 @@ jobs:
         run: |
           python3 macos/build_native.py --flow flow-sdk/flow --output build/garden-apple-silicon
           test -x build/garden-apple-silicon
+      - name: Verify native Metal rendering with Flow-generated MSL
+        run: |
+          clang -O2 -fobjc-arc macos/metal_probe.m macos/garden_metal.m \
+            -framework Foundation -framework Metal -o /tmp/flow-garden-metal-probe
+          FLOW_GARDEN_MSL="$(pwd)/dist/gpu/garden_scene/sh0_garden.metal" \
+            /tmp/flow-garden-metal-probe
       - name: Compare baseline with Apple Silicon-tuned native renderer
         run: |
           python3 macos/benchmark_native.py --flow flow-sdk/flow --frames 18 --repeats 2
