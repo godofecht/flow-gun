@@ -17,6 +17,63 @@ import "stdlib/text.flow"
 # It projects the *same* cells and organisms as the 2D simulation.
 import "stdlib/render3d.flow"
 
+# Optional GPU frame bridge: same ecological arrays and view matrix as the
+# software renderer. Browser WebGPU and macOS Metal may claim a frame; all
+# other targets use the original Flow depth-tested renderer unchanged.
+@cEmbed("
+#include <stdint.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+EM_JS(int32_t, garden_gpu_enabled, (), {
+    return globalThis.flowGardenGPU?.ready ? 1 : 0;
+});
+EM_JS(int32_t, garden_gpu_frame,
+      (int32_t* ground, int32_t* plant, int32_t* age, float* wet,
+       float* food, uint32_t* ga, uint32_t* gb, float* heights,
+       float* viewproj, uint8_t* pixels, int32_t epoch), {
+    const renderer = globalThis.flowGardenGPU;
+    if (!renderer?.ready) return 0;
+    renderer.submit({
+        epoch,
+        ground: HEAP32.slice(ground >> 2, (ground >> 2) + 4096),
+        plant: HEAP32.slice(plant >> 2, (plant >> 2) + 4096),
+        age: HEAP32.slice(age >> 2, (age >> 2) + 4096),
+        wet: HEAPF32.slice(wet >> 2, (wet >> 2) + 4096),
+        food: HEAPF32.slice(food >> 2, (food >> 2) + 4096),
+        ga: HEAPU32.slice(ga >> 2, (ga >> 2) + 4096),
+        gb: HEAPU32.slice(gb >> 2, (gb >> 2) + 4096),
+        heights: HEAPF32.slice(heights >> 2, (heights >> 2) + 4096),
+        viewproj: HEAPF32.slice(viewproj >> 2, (viewproj >> 2) + 16)
+    });
+    return 1;
+});
+EM_JS(void, garden_gpu_hide, (), {
+    globalThis.flowGardenGPU?.hide();
+});
+#else
+__attribute__((weak)) int32_t garden_gpu_enabled(void) { return 0; }
+__attribute__((weak)) int32_t garden_gpu_frame(
+    int32_t* ground, int32_t* plant, int32_t* age, float* wet,
+    float* food, uint32_t* ga, uint32_t* gb, float* heights,
+    float* viewproj, uint8_t* pixels, int32_t epoch) {
+    (void)ground; (void)plant; (void)age; (void)wet; (void)food;
+    (void)ga; (void)gb; (void)heights; (void)viewproj;
+    (void)pixels; (void)epoch;
+    return 0;
+}
+__attribute__((weak)) void garden_gpu_hide(void) {}
+#endif
+")
+extern {
+    function garden_gpu_enabled() -> i32
+    function garden_gpu_frame(ground: ptr<i32>, plant: ptr<i32>, age: ptr<i32>,
+                              wet: ptr<f32>, food: ptr<f32>,
+                              ga: ptr<u32>, gb: ptr<u32>, heights: ptr<f32>,
+                              viewproj: ptr<f32>, pixels: ptr<u8>, epoch: i32) -> i32
+    function garden_gpu_hide() -> void
+}
+
+
 const KEY_TAB: i32 = 48
 const KEY_V: i32 = 9
 const KEY_Z: i32 = 6
@@ -1513,7 +1570,7 @@ function main() -> i32 {
 
         # Organ topology only changes after biological updates, not camera
         # rotations. Rebuild every six ecological steps to amortise work.
-        if show3d and epoch - meshed_epoch >= 6 {
+        if show3d and epoch - meshed_epoch >= 6 and garden_gpu_enabled() == 0 {
             build_garden_surface(ground, wet, heights)
             append_garden_organs(plant, age, food, wet, genes_a, genes_b, heights)
             meshed_epoch = epoch
@@ -1544,13 +1601,18 @@ function main() -> i32 {
                 m4_perspective(p_proj, r3d_radians(fov),
                                (SCENE_W as f32) / (SCENE_H as f32), 0.12, 160.0)
                 m4_mul(p_vp, projection, view)
-                r3d_clear_gradient(v3(0.28, 0.45, 0.58), v3(0.75, 0.78, 0.63))
-                r3d_draw_mesh(model, viewproj, v3(0.38, 0.78, 0.42), R3D_GOURAUD)
-                paint_living_3d(viewproj, plant, age, wet, food,
-                                genes_a, genes_b, code_axis, code_branch,
-                                code_leaf, code_seed, cached_a, cached_b,
-                                cached_species, heights,
-                                eye.x, eye.z, fwd3.x, fwd3.z, orbit)
+                let gpu_drawn: bool = garden_gpu_frame(ground, plant, age,
+                    wet, food, genes_a, genes_b, heights, viewproj,
+                    r3d_pixels(), epoch) != 0
+                if !gpu_drawn {
+                    r3d_clear_gradient(v3(0.28, 0.45, 0.58), v3(0.75, 0.78, 0.63))
+                    r3d_draw_mesh(model, viewproj, v3(0.38, 0.78, 0.42), R3D_GOURAUD)
+                    paint_living_3d(viewproj, plant, age, wet, food,
+                                    genes_a, genes_b, code_axis, code_branch,
+                                    code_leaf, code_seed, cached_a, cached_b,
+                                    cached_species, heights,
+                                    eye.x, eye.z, fwd3.x, fwd3.z, orbit)
+                }
                 rendered_epoch = epoch
                 rendered_x = cam_x
                 rendered_z = cam_z
@@ -1567,6 +1629,7 @@ function main() -> i32 {
                 else { "WALK / DRAG LOOK / WASD MOVE / F FAST" },
                 1, 222, 223, 185)
         } else {
+            garden_gpu_hide()
             # Planting or resetting from 2D must invalidate 3D's cached image.
             rendered_epoch = -1
             draw_garden(g, pixels, ground, wet, food, plant, age, genes_a, genes_b,

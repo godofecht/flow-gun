@@ -221,3 +221,35 @@ The GitHub workflow is a compile/record smoke test against current Flow main. Th
 Add competition for vertical canopy light, soil microbes and decomposers, nutrient-driven root branching, pollen agents and directional seed drift, seasons, or a state-to-state recognition/residual probe to detect emergent ecological regimes. The current model is intentionally small and inspectable.
 
 The core implementation is in [`src/garden.flow`](src/garden.flow).
+
+## Flow-generated Metal and WebGPU garden renderer
+
+The same typed Flow GPU shader in [src/garden_gpu.flow](src/garden_gpu.flow)
+emits both MSL and WGSL. The GitHub Pages workflow automatically builds
+WGSL alongside SIMD-enabled WebAssembly. When a browser exposes WebGPU,
+[site/garden-webgpu.js](site/garden-webgpu.js) draws the actual living
+garden cells and camera through a hardware depth-tested pipeline. Without
+WebGPU the original Flow software 3D view runs unchanged. The browser
+still runs the same ecological simulation with the same seed, genetics,
+weather and interaction.
+
+On Apple Silicon, run:
+
+    python3 macos/build_native.py --flow flow-sdk/flow --run
+
+This builds the original Flow app with a Metal rasterisation path, using
+the same Flow-generated MSL and a software fallback.
+
+The GPU paths currently draw simplified crossed-leaf geometry rather than
+the software renderer's complete organ graph. This is a genuine GPU draw
+from the same Flow world state, not a duplicate simulation, but exact pixel
+parity and measured interactive FPS improvement are not yet established.
+
+## Experimental Apple Silicon acceleration
+
+The optional [macOS Core ML benchmark](macos/README.md) tests batching the
+existing genotype-to-visual-phenotype calculations through Core ML with
+CPU and CPU/Neural Engine settings. It verifies output agreement and measures
+full batch latency on Apple Silicon; **it is not wired into the interactive
+Flow renderer and makes no speedup claim**. The regular deterministic Flow,
+Linux and WebAssembly paths remain unchanged.

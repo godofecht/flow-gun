@@ -1,0 +1,57 @@
+name: Experimental Apple Silicon Core ML phenotype
+
+on:
+  push:
+    paths:
+      - 'macos/**'
+      - 'src/garden.flow'
+      - 'src/garden_gpu.flow'
+      - '.github/workflows/macos-ane.yml'
+  pull_request:
+    paths:
+      - 'macos/**'
+      - '.github/workflows/macos-ane.yml'
+  workflow_dispatch:
+
+jobs:
+  apple-silicon:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Apple Silicon runner
+        run: |
+          uname -m
+          test "$(uname -m)" = arm64
+      - name: Swift CPU reference tests
+        run: swift test --package-path macos
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate the Core ML model
+        run: |
+          python -m pip install 'numpy<3' 'coremltools>=8,<10'
+          python macos/tools/build_model.py --out macos/GardenPhenotype.mlpackage
+      - name: Core ML CPU vs CPU/ANE parity and diagnostic benchmark
+        run: |
+          swift run --package-path macos -c release garden-ane \
+            --model=macos/GardenPhenotype.mlpackage --iterations=50
+      - name: Checkout Flow compiler for actual 3D rendering benchmark
+        uses: actions/checkout@v4
+        with:
+          repository: flooooooooooow/flow
+          path: flow-sdk
+          persist-credentials: false
+      - name: Build Apple Silicon Cocoa app from the original Flow source
+        run: |
+          python3 macos/build_native.py --flow flow-sdk/flow --output build/garden-apple-silicon
+          test -x build/garden-apple-silicon
+      - name: Verify native Metal rendering with Flow-generated MSL
+        run: |
+          clang -O2 -fobjc-arc macos/metal_probe.m macos/garden_metal.m \
+            -framework Foundation -framework Metal -o /tmp/flow-garden-metal-probe
+          FLOW_GARDEN_MSL="$(pwd)/dist/gpu/garden_scene/sh0_garden.metal" \
+            /tmp/flow-garden-metal-probe
+      - name: Compare baseline with Apple Silicon-tuned native renderer
+        run: |
+          python3 macos/benchmark_native.py --flow flow-sdk/flow --frames 18 --repeats 2

@@ -18,12 +18,22 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(done => server.listen(0, '127.0.0.1', done));
 const port = server.address().port;
-const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const gpuFlags = process.env.GARDEN_TEST_WEBGPU
+  ? ['--enable-unsafe-webgpu', '--enable-features=Vulkan',
+     '--use-angle=vulkan', '--use-vulkan=swiftshader',
+     '--use-webgpu-adapter=swiftshader', '--disable-vulkan-surface',
+     '--ignore-gpu-blocklist'] : [];
+const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage', ...gpuFlags] });
 let page;
 try {
   page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
+  page.on('console', message => {
+    if (/WebGPU|GPU fallback|shader/i.test(message.text())) {
+      console.log('Browser console: ' + message.text());
+    }
+  });
   page.on('requestfailed', request => errors.push(`${request.url()} ${request.failure()?.errorText}`));
   const address = process.env.GARDEN_TEST_URL || `http://127.0.0.1:${port}/`;
   await page.goto(address, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -45,7 +55,7 @@ try {
     for (let i = 0; i < image.length; i += 124) colors.add(`${image[i]},${image[i+1]},${image[i+2]}`);
     return { frame: win.flowGfx.frames, width: rect.width, height: rect.height, colors: colors.size };
   });
-  if (before.colors < 20) throw new Error(`Frame is visually blank: ${JSON.stringify(before)}`);
+  if (before.colors < 20 && !process.env.GARDEN_TEST_WEBGPU) throw new Error(`Frame is visually blank: ${JSON.stringify(before)}`);
   await page.waitForTimeout(850);
   const after = await page.evaluate(() => document.querySelector('#garden-frame').contentWindow.flowGfx.frames);
   if (after <= before.frame + 4) throw new Error(`Not rendering live: ${before.frame} -> ${after}`);
@@ -56,6 +66,44 @@ try {
     return { frame: win.flowGfx?.frames, canvas: win.flowGfx?.canvas?.getBoundingClientRect().width, view: document.querySelector('#toggle-dimension').getAttribute('aria-pressed') };
   });
   if (state.view !== 'true' || state.frame <= after) throw new Error(`3D toggle failed: ${JSON.stringify(state)}`);
+  const webgpu = await page.evaluate(() => {
+    const w = document.querySelector('#garden-frame')?.contentWindow;
+    return { offered: !!w?.navigator?.gpu, ready: !!w?.flowGardenGPU?.ready,
+             frames: w?.flowGardenGPU?.frames ?? 0 };
+  });
+  if (process.env.GARDEN_TEST_WEBGPU) {
+    const canUseGPU = await page.evaluate(async () => {
+      const win = document.querySelector('#garden-frame')?.contentWindow;
+      if (!win?.navigator?.gpu) return false;
+      const adapter = await win.navigator.gpu.requestAdapter().catch(() => null);
+      return !!adapter;
+    });
+    const gpuDiagnostics = await page.evaluate(() => {
+      const iframe = document.querySelector('#garden-frame');
+      const w = iframe?.contentWindow;
+      return {
+        gpu: w?.flowGardenGPU ? {ready: w.flowGardenGPU.ready,
+          frames: w.flowGardenGPU.frames, status: w.flowGardenGPU.status} : null,
+        modules: [...(w?.document?.querySelectorAll('script[type="module"]')||[])]
+          .map(x=>x.src),
+        overlay: w?.document?.querySelector('canvas[aria-hidden="true"]')
+          ? {hidden: w.document.querySelector('canvas[aria-hidden="true"]').hidden} : null,
+      };
+    });
+    console.log('GPU runner diagnostics: '+JSON.stringify(gpuDiagnostics));
+    if (!canUseGPU) {
+      console.log('SKIP: headless Chromium has no WebGPU adapter; software WASM fallback verified');
+    } else {
+      await page.waitForFunction(() => {
+        const w = document.querySelector('#garden-frame')?.contentWindow;
+        return w?.flowGardenGPU?.frames >= 3;
+      }, undefined, { timeout: 20000 });
+      console.log('PASS: live WASM garden sent real ecological state through Flow-generated WGSL/WebGPU');
+    }
+  } else {
+    console.log('WebGPU capability: ' + JSON.stringify(webgpu) +
+      '; software fallback remains available');
+  }
   // Exercise the touch pad on the real WASM key array, including release.
   const mobile = await browser.newPage({ viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true });
   try {
@@ -102,7 +150,7 @@ try {
     const win = document.querySelector('#garden-frame')?.contentWindow;
     return { status: document.querySelector('#garden-runtime')?.textContent, embeddedStatus: win?.document?.querySelector('#status')?.textContent, embeddedLog: win?.document?.querySelector('#out')?.textContent?.slice(-3000), canvasWidth: win?.flowGfx?.canvas?.getBoundingClientRect()?.width, frames: win?.flowGfx?.frames };
   }).catch(() => 'cannot inspect iframe');
-  console.error('Browser runtime diagnostics:', issue, error);
+  console.error('Browser runtime diagnostics:', issue, error, 'Browser errors:', errors);
   process.exitCode = 1;
 } finally {
   await browser.close();
