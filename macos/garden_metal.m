@@ -51,7 +51,9 @@ static void plantQuad(float x,float y,float z,float height,float radius,
 }
 static void point(float p[3],int x,int y,const float *height) {
     p[0]=(float)(x*2-32);
-    p[1]=height[(y*2)*64+(x*2)];
+    const int sx=x<32?x*2:63;
+    const int sy=y<32?y*2:63;
+    p[1]=height[sy*64+sx];
     p[2]=(float)(y*2-32);
 }
 static void buildScene(const int32_t *ground,const int32_t *plants,const int32_t *age,
