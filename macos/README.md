@@ -73,6 +73,44 @@ study. The Core ML compute-unit option does not establish actual ANE placement.
 A future heavy learned morphology network could cross the break-even point,
 but it would require different measurements and actual integration.
 
+## Native macOS application build: successful PGO experiment
+
+The actual bottleneck in Flow-gun is its **CPU 3D software rasterizer**, not
+its tiny 64×64 phenotype arithmetic. An Apple Silicon-specific build profile
+is now available for the **original Flow source and Cocoa window**:
+
+```sh
+git clone https://github.com/flooooooooooow/flow.git flow-sdk
+python3 macos/build_native.py --flow flow-sdk/flow --run
+```
+
+Requires an Apple Silicon Mac, the Xcode command-line tools, Python 3 and the
+Flow compiler checkout. The script compiles the original `src/garden.flow`,
+trains PGO on real 3D garden frames, then links the **same Flow program** to
+its standard Cocoa graphics backend using `-O2 -mcpu=native` and the generated
+profile. No simulated garden, altered biology or GPU acceleration is involved.
+The default `flow gfx src/garden.flow` remains unchanged. Run
+`python3 macos/build_native.py --flow flow-sdk/flow --no-pgo --run`
+for the conservative Apple CPU build without PGO.
+
+On the GitHub-hosted macOS 15 arm64 runner on 17 October 2026, five compiler
+variants produced **pixel-identical 18-frame moving 3D recordings**:
+
+| Compiled garden | Median 18-frame wall time (2 runs) | vs baseline |
+|---|---:|---:|
+| Flow-compatible `-O2` | 0.3811 s | 1.000× |
+| `-O2 -mcpu=native` | 0.3653 s | 1.043× |
+| `-O3 -mcpu=native` | 0.3944 s | 0.966× |
+| `-Oz -mcpu=native` | 0.4326 s | 0.881× |
+| **`-O2 -mcpu=native` with PGO** | **0.3466 s** | **1.099×** |
+
+Source: [successful moving 3D benchmark CI](https://github.com/godofecht/flow-gun/actions/runs/39041066519).
+Times include startup and writing image files, not just rasterization;
+these are small CI samples and **not** stable interactive frame-rate
+measurements. The CI runner has no validated user-visible Cocoa window test;
+only the build, headless rendering, exact pixel parity and timing are tested.
+The script intentionally keeps Linux, WebAssembly and Flow core untouched.
+
 ## Runtime integration gate
 
 This is a safe first stage; it intentionally does not duplicate the Flow
