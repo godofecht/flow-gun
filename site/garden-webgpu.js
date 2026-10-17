@@ -101,10 +101,11 @@ function draw(w) {
 function fallback(reason){
   console.info('Flow Garden WebGPU fallback: '+String(reason));
   globalThis.flowGardenGPU.ready=false;
+  globalThis.flowGardenGPU.status=String(reason);
   globalThis.flowGardenGPU.hide();
 }
 globalThis.flowGardenGPU={
-  ready:false,frames:0,
+  ready:false,frames:0,status:'starting',
   hide(){overlay.hidden=true;overlay.style.display='none';},
   submit(world){
     latest=world;
@@ -118,9 +119,11 @@ globalThis.flowGardenGPU={
   }
 };
 async function start(){
-  if(!navigator.gpu)return;
+  if(!navigator.gpu){ globalThis.flowGardenGPU.status='no-navigator-gpu'; return false; }
+  globalThis.flowGardenGPU.status='requesting-adapter';
   const adapter=await navigator.gpu.requestAdapter();
-  if(!adapter)return;
+  if(!adapter){ globalThis.flowGardenGPU.status='no-adapter'; return false; }
+  globalThis.flowGardenGPU.status='configuring-pipeline';
   device=await adapter.requestDevice();
   device.lost.then(info=>fallback('device lost: '+info.message));
   const res=await fetch('../gpu/garden_scene/sh0_garden.wgsl');
@@ -152,7 +155,21 @@ async function start(){
   group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),
     entries:[{binding:0,resource:{buffer:uniform}}]});
   globalThis.flowGardenGPU.ready=true;
+  globalThis.flowGardenGPU.status='ready';
+  return true;
 }
-start().catch(fallback);
+let booting=false;
+async function initialize(){
+  if(booting||globalThis.flowGardenGPU.ready)return;
+  booting=true;
+  try{
+    for(let attempt=0;attempt<8;attempt++){
+      if(await start())return;
+      await new Promise(resolve=>setTimeout(resolve,800));
+    }
+  }catch(error){fallback(error);}
+  finally{booting=false;}
+}
+initialize();
 window.addEventListener('resize',align);
 window.addEventListener('scroll',align,{passive:true});
