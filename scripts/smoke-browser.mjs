@@ -27,6 +27,11 @@ try {
   page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
+  page.on('console', message => {
+    if (/WebGPU|GPU fallback|shader/i.test(message.text())) {
+      console.log('Browser console: ' + message.text());
+    }
+  });
   page.on('requestfailed', request => errors.push(`${request.url()} ${request.failure()?.errorText}`));
   const address = process.env.GARDEN_TEST_URL || `http://127.0.0.1:${port}/`;
   await page.goto(address, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -65,11 +70,21 @@ try {
              frames: w?.flowGardenGPU?.frames ?? 0 };
   });
   if (process.env.GARDEN_TEST_WEBGPU) {
-    await page.waitForFunction(() => {
-      const w = document.querySelector('#garden-frame')?.contentWindow;
-      return w?.flowGardenGPU?.frames >= 3;
-    }, undefined, { timeout: 20000 });
-    console.log('PASS: live WASM garden sent real ecological state through Flow-generated WGSL/WebGPU');
+    const canUseGPU = await page.evaluate(async () => {
+      const win = document.querySelector('#garden-frame')?.contentWindow;
+      if (!win?.navigator?.gpu) return false;
+      const adapter = await win.navigator.gpu.requestAdapter().catch(() => null);
+      return !!adapter;
+    });
+    if (!canUseGPU) {
+      console.log('SKIP: headless Chromium has no WebGPU adapter; software WASM fallback verified');
+    } else {
+      await page.waitForFunction(() => {
+        const w = document.querySelector('#garden-frame')?.contentWindow;
+        return w?.flowGardenGPU?.frames >= 3;
+      }, undefined, { timeout: 20000 });
+      console.log('PASS: live WASM garden sent real ecological state through Flow-generated WGSL/WebGPU');
+    }
   } else {
     console.log('WebGPU capability: ' + JSON.stringify(webgpu) +
       '; software fallback remains available');
