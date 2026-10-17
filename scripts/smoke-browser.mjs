@@ -83,7 +83,7 @@ try {
       const w = iframe?.contentWindow;
       return {
         gpu: w?.flowGardenGPU ? {ready: w.flowGardenGPU.ready,
-          frames: w.flowGardenGPU.frames} : null,
+          frames: w.flowGardenGPU.frames, status: w.flowGardenGPU.status} : null,
         modules: [...(w?.document?.querySelectorAll('script[type="module"]')||[])]
           .map(x=>x.src),
         overlay: w?.document?.querySelector('canvas[aria-hidden="true"]')
@@ -150,7 +150,7 @@ try {
     const win = document.querySelector('#garden-frame')?.contentWindow;
     return { status: document.querySelector('#garden-runtime')?.textContent, embeddedStatus: win?.document?.querySelector('#status')?.textContent, embeddedLog: win?.document?.querySelector('#out')?.textContent?.slice(-3000), canvasWidth: win?.flowGfx?.canvas?.getBoundingClientRect()?.width, frames: win?.flowGfx?.frames };
   }).catch(() => 'cannot inspect iframe');
-  console.error('Browser runtime diagnostics:', issue, error);
+  console.error('Browser runtime diagnostics:', issue, error, 'Browser errors:', errors);
   process.exitCode = 1;
 } finally {
   await browser.close();
