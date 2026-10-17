@@ -12,6 +12,11 @@
 #define GARDEN_W 512
 #define GARDEN_H 480
 #define MAX_VERTICES 200000
+#if __has_feature(objc_arc)
+#define GARDEN_RELEASE(obj) ((void)0)
+#else
+#define GARDEN_RELEASE(obj) [(obj) release]
+#endif
 
 typedef struct { float x,y,z,r,g,b; } GardenVertex;
 static GardenVertex *mesh = NULL;
@@ -183,7 +188,7 @@ int32_t garden_gpu_frame(int32_t *ground,int32_t *plants,int32_t *age,
         pass.depthAttachment.storeAction=MTLStoreActionDontCare;
         pass.depthAttachment.clearDepth=1.0;
         id<MTLRenderCommandEncoder> enc=[cb renderCommandEncoderWithDescriptor:pass];
-        if(!enc)return 0;
+        if(!enc){ GARDEN_RELEASE(vb); return 0; }
         [enc setRenderPipelineState:pipeline];
         [enc setDepthStencilState:depthState];
         [enc setVertexBuffer:vb offset:0 atIndex:16];
@@ -192,7 +197,7 @@ int32_t garden_gpu_frame(int32_t *ground,int32_t *plants,int32_t *age,
         [enc endEncoding];
         [cb commit];
         [cb waitUntilCompleted];
-        if(cb.status!=MTLCommandBufferStatusCompleted)return 0;
+        if(cb.status!=MTLCommandBufferStatusCompleted){ GARDEN_RELEASE(vb); return 0; }
         [colorTexture getBytes:readback bytesPerRow:GARDEN_W*4
                        fromRegion:MTLRegionMake2D(0,0,GARDEN_W,GARDEN_H)
                        mipmapLevel:0];
@@ -201,6 +206,7 @@ int32_t garden_gpu_frame(int32_t *ground,int32_t *plants,int32_t *age,
             rgb[3*k+1]=readback[4*k+1];
             rgb[3*k+2]=readback[4*k+2];
         }
+        GARDEN_RELEASE(vb);
         return 1;
     }
 }
