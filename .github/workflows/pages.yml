@@ -48,7 +48,7 @@ jobs:
         run: |
           node --check site/site.js
           node --check scripts/smoke-browser.mjs
-          node --check site/garden-webgpu.mjs
+          node --check site/garden-webgpu.js
       - name: Generate both WebGPU WGSL and Metal shaders from Flow's GPU pipeline
         run: |
           ./flow-sdk/flow run src/garden_gpu.flow
@@ -68,7 +68,7 @@ jobs:
           page = Path("dist/garden/index.html")
           html = page.read_text()
           assert "</head>" in html
-          html = html.replace("</head>", '<link rel="stylesheet" href="../embed.css?v=visible-canvas-2"><script type="module" src="../garden-webgpu.mjs"></script></head>')
+          html = html.replace("</head>", '<link rel="stylesheet" href="../embed.css?v=visible-canvas-2"><script type="module" src="../garden-webgpu.js"></script></head>')
           page.write_text(html)
           PY
       - name: Prepare website and stamp source revision
@@ -77,7 +77,7 @@ jobs:
           touch dist/.nojekyll
           test -s dist/index.html
           test -s dist/embed.css
-          test -s dist/garden-webgpu.mjs
+          test -s dist/garden-webgpu.js
           test -s dist/gpu/garden_scene/sh0_garden.wgsl
           grep -q '../embed.css' dist/garden/index.html
           python3 - <<'PY'
@@ -108,12 +108,12 @@ jobs:
           # Mirroring prevents it from replacing the live WASM app with a
           # README-only Jekyll site after later repository updates.
           mkdir -p garden
-          cp dist/index.html dist/site.js dist/style.css dist/embed.css dist/flower.svg dist/garden-webgpu.mjs ./
+          cp dist/index.html dist/site.js dist/style.css dist/embed.css dist/flower.svg dist/garden-webgpu.js ./
           mkdir -p gpu/garden_scene
           cp dist/gpu/garden_scene/sh0_garden.wgsl gpu/garden_scene/
           cp dist/garden/index.html dist/garden/garden.js dist/garden/garden.wasm garden/
           cp dist/.nojekyll ./
-          git add -f .nojekyll index.html site.js style.css embed.css flower.svg garden-webgpu.mjs gpu/garden_scene/sh0_garden.wgsl garden/index.html garden/garden.js garden/garden.wasm
+          git add -f .nojekyll index.html site.js style.css embed.css flower.svg garden-webgpu.js gpu/garden_scene/sh0_garden.wgsl garden/index.html garden/garden.js garden/garden.wasm
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
