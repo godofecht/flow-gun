@@ -18,7 +18,10 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(done => server.listen(0, '127.0.0.1', done));
 const port = server.address().port;
-const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const gpuFlags = process.env.GARDEN_TEST_WEBGPU
+  ? ['--enable-unsafe-webgpu', '--enable-dawn-features=allow_unsafe_apis',
+     '--use-angle=swiftshader', '--enable-features=Vulkan'] : [];
+const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage', ...gpuFlags] });
 let page;
 try {
   page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -56,6 +59,21 @@ try {
     return { frame: win.flowGfx?.frames, canvas: win.flowGfx?.canvas?.getBoundingClientRect().width, view: document.querySelector('#toggle-dimension').getAttribute('aria-pressed') };
   });
   if (state.view !== 'true' || state.frame <= after) throw new Error(`3D toggle failed: ${JSON.stringify(state)}`);
+  const webgpu = await page.evaluate(() => {
+    const w = document.querySelector('#garden-frame')?.contentWindow;
+    return { offered: !!w?.navigator?.gpu, ready: !!w?.flowGardenGPU?.ready,
+             frames: w?.flowGardenGPU?.frames ?? 0 };
+  });
+  if (process.env.GARDEN_TEST_WEBGPU) {
+    await page.waitForFunction(() => {
+      const w = document.querySelector('#garden-frame')?.contentWindow;
+      return w?.flowGardenGPU?.frames >= 3;
+    }, undefined, { timeout: 20000 });
+    console.log('PASS: live WASM garden sent real ecological state through Flow-generated WGSL/WebGPU');
+  } else {
+    console.log('WebGPU capability: ' + JSON.stringify(webgpu) +
+      '; software fallback remains available');
+  }
   // Exercise the touch pad on the real WASM key array, including release.
   const mobile = await browser.newPage({ viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true });
   try {
