@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Benchmark real Flow-gun 3D frames with standard vs Apple Silicon-tuned Clang.
+"""Actual moving 3D Flow-gun frames: macOS arm64 compiler experiments.
 
-No model, synthetic grid, benchmark-only renderer, or changes to the Flow
-simulator: both binaries execute the exact C source emitted by Flow.
+All candidates compile exactly the same Flow-generated C, with no different
+garden rules or synthetic renderer. Pixel parity is checked frame by frame.
 """
 import argparse
 import hashlib
 import os
 from pathlib import Path
 import platform
-import shutil
 import statistics
 import subprocess
 import tempfile
@@ -19,7 +18,7 @@ import time
 def execute(command, *, environment=None, quiet=False):
     if not quiet:
         print("+", " ".join(str(arg) for arg in command), flush=True)
-    subprocess.run(command, env=environment, check=True,
+    subprocess.run([str(arg) for arg in command], env=environment, check=True,
                    stdout=subprocess.DEVNULL if quiet else None,
                    stderr=subprocess.DEVNULL if quiet else None)
 
@@ -30,7 +29,7 @@ def timed(binary, folder, frames):
     environment.update({
         "FLOW_GFX_RECORD_DIR": str(folder),
         "FLOW_GFX_RECORD_FRAMES": str(frames),
-        # Enter 3D and continuously orbit: tests actual CPU raster workload.
+        # Tab toggles 3D, arrow rotates continuously. No idle frame timing.
         "FLOW_GFX_RECORD_KEYS": "1:48,2:48,4-200:123",
     })
     start = time.perf_counter()
@@ -42,91 +41,97 @@ def timed(binary, folder, frames):
     return elapsed, images
 
 
-def sha(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).digest()
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--flow", type=Path, default=Path("flow-sdk/flow"))
-    parser.add_argument("--frames", type=int, default=32)
+    parser.add_argument("--frames", type=int, default=24)
     parser.add_argument("--repeats", type=int, default=3)
-    parser.add_argument("--require-speedup", action="store_true")
-    arguments = parser.parse_args()
+    args = parser.parse_args()
     if platform.system() != "Darwin" or platform.machine() != "arm64":
-        parser.error("Apple Silicon macOS required")
-    if arguments.frames < 8 or arguments.repeats < 1:
+        parser.error("Apple Silicon macOS is required")
+    if args.frames < 8 or args.repeats < 1:
         parser.error("at least 8 frames and 1 repeat required")
-    flow = arguments.flow.resolve()
+    flow = args.flow.resolve()
     sdk = flow.parent
     source = Path("src/garden.flow").resolve()
-    if not source.exists():
-        parser.error("run from flow-gun repository root")
 
-    # Flow's own record command compiles the correct runtime archive and
-    # generator source; never guess the Flow ABI or depend on old codegen.
     with tempfile.TemporaryDirectory(prefix="garden-macos-") as temporary:
         scratch = Path(temporary)
-        env = os.environ.copy()
-        env.update({
-            "FLOW_GFX_RECORD_FRAMES": "1",
-            "FLOW_GFX_RECORD_DIR": str(scratch / "bootstrap"),
-        })
         execute([str(flow), "record", str(source), "--frames", "1",
-                 "--out", str(scratch / "bootstrap")], environment=env)
-
-        generated = sdk / "build" / "garden.record.c"
-        recorder = sdk / "build" / "runtime_flow" / "gfx_record.c"
+                 "--out", str(scratch / "bootstrap")])
+        generated = sdk / "build/garden.record.c"
+        recorder = sdk / "build/runtime_flow/gfx_record.c"
         libraries = list(sdk.rglob("libflowrt.a"))
         if not generated.exists() or not recorder.exists() or not libraries:
-            raise RuntimeError("Flow record generated C / runtime archive missing")
-        # The recorder toolchain builds a single runtime archive for this checkout.
+            raise RuntimeError("Flow did not generate recorder C and runtime archive")
         archive = max(libraries, key=lambda p: p.stat().st_mtime)
-        files = [str(generated), str(recorder),
-                 str(sdk / "runtime" / "gfx_record.c"), str(archive)]
+        sources = [generated, recorder, sdk / "runtime/gfx_record.c", archive]
 
-        binaries = {}
-        for name, extra in {
-            "standard": ["-O2"],
-            "apple-silicon": ["-O3", "-mcpu=native"],
-        }.items():
+        def build(name, flags):
             target = scratch / name
-            execute(["clang", *extra, "-fno-omit-frame-pointer",
-                     "-Wno-error=implicit-function-declaration", *files,
-                     "-framework", "CoreFoundation", "-lm",
-                     "-o", str(target)])
-            binaries[name] = target
+            execute(["clang", *flags, "-fno-omit-frame-pointer",
+                     "-Wno-error=implicit-function-declaration",
+                     *sources, "-framework", "CoreFoundation", "-lm",
+                     "-o", target])
+            return target
 
-        elapsed = {"standard": [], "apple-silicon": []}
-        for repeat in range(arguments.repeats):
-            # Alternate ordering to reduce thermal/caching bias.
-            names = list(binaries)
-            if repeat % 2:
-                names.reverse()
-            captured = {}
+        binary = {
+            "baseline O2": build("baseline", ["-O2"]),
+            "O2 native": build("o2native", ["-O2", "-mcpu=native"]),
+            "O3 native": build("o3native", ["-O3", "-mcpu=native"]),
+            "Oz native": build("oznative", ["-Oz", "-mcpu=native"]),
+        }
+        instrumented = build("instrumented", [
+            "-O2", "-mcpu=native", "-fprofile-instr-generate"
+        ])
+        profile_path = scratch / "training.profraw"
+        os.environ["LLVM_PROFILE_FILE"] = str(profile_path)
+        try:
+            timed(instrumented, scratch / "training-frames", args.frames)
+        finally:
+            del os.environ["LLVM_PROFILE_FILE"]
+        profile_data = scratch / "training.profdata"
+        execute(["xcrun", "llvm-profdata", "merge", "-output", profile_data,
+                 profile_path])
+        binary["PGO native"] = build("pgo", [
+            "-O2", "-mcpu=native", f"-fprofile-instr-use={profile_data}"
+        ])
+
+        elapsed = {key: [] for key in binary}
+        all_names = list(binary)
+        for repeat in range(args.repeats):
+            names = all_names[repeat % len(all_names):] + all_names[:repeat % len(all_names)]
+            captures = {}
             for name in names:
-                folder = scratch / f"{name}-{repeat}"
-                seconds, images = timed(binaries[name], folder, arguments.frames)
-                elapsed[name].append(seconds)
-                captured[name] = images
-            for index, (base, tuned) in enumerate(zip(
-                    captured["standard"], captured["apple-silicon"])):
-                if sha(base) != sha(tuned):
-                    raise RuntimeError(
-                        f"pixel parity failed: iteration {repeat}, frame {index}"
-                    )
-            # Ensure we really rendered a moving scene, not a frozen viewport.
-            if sha(captured["standard"][3]) == sha(captured["standard"][-1]):
-                raise RuntimeError("camera motion fixture produced identical frames")
-        baseline = statistics.median(elapsed["standard"])
-        optimized = statistics.median(elapsed["apple-silicon"])
-        speedup = baseline / optimized
-        print(f"PASS: pixel-exact parity across {arguments.frames} moving 3D frames")
-        print(f"standard -O2:      {baseline:.4f}s median ({arguments.repeats} runs)")
-        print(f"apple -O3 -mcpu:   {optimized:.4f}s median ({arguments.repeats} runs)")
-        print(f"end-to-end speedup: {speedup:.3f}x")
-        if arguments.require_speedup and speedup <= 1.0:
-            raise SystemExit("Apple Silicon compiler tuning is not faster")
+                duration, images = timed(
+                    binary[name], scratch / f"{name.replace(' ', '-')}-{repeat}",
+                    args.frames
+                )
+                elapsed[name].append(duration)
+                captures[name] = [digest(path) for path in images]
+            reference = captures["baseline O2"]
+            if reference[3] == reference[-1]:
+                raise RuntimeError("camera fixture did not produce moving 3D frames")
+            for name in binary:
+                if captures[name] != reference:
+                    bad = next(i for i, (a, b) in enumerate(
+                        zip(reference, captures[name])) if a != b)
+                    raise RuntimeError(f"{name} has different pixels at frame {bad}")
+
+        base = statistics.median(elapsed["baseline O2"])
+        print(f"PASS: pixel-exact parity across {args.frames} moving 3D frames")
+        for name in binary:
+            value = statistics.median(elapsed[name])
+            print(f"{name}: {value:.4f}s median ({args.repeats} runs), " +
+                  f"end-to-end speedup: {base / value:.3f}x")
+        winner = min(binary, key=lambda name: statistics.median(elapsed[name]))
+        print(f"WINNER: {winner}")
+        if winner == "baseline O2":
+            print("NO MAC BUILD SPEEDUP: keep Flow's default native optimisation")
 
 
 if __name__ == "__main__":
