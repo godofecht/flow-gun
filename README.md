@@ -227,7 +227,7 @@ The core implementation is in [`src/garden.flow`](src/garden.flow).
 The same typed Flow GPU shader in [src/garden_gpu.flow](src/garden_gpu.flow)
 emits both MSL and WGSL. The GitHub Pages workflow automatically builds
 WGSL alongside SIMD-enabled WebAssembly. When a browser exposes WebGPU,
-[site/garden-webgpu.mjs](site/garden-webgpu.mjs) draws the actual living
+[site/garden-webgpu.js](site/garden-webgpu.js) draws the actual living
 garden cells and camera through a hardware depth-tested pipeline. Without
 WebGPU the original Flow software 3D view runs unchanged. The browser
 still runs the same ecological simulation with the same seed, genetics,
