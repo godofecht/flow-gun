@@ -40,6 +40,10 @@ jobs:
           repository: flooooooooooow/flow
           path: flow-sdk
           persist-credentials: false
+      - name: Build Apple Silicon Cocoa app from the original Flow source
+        run: |
+          python3 macos/build_native.py --flow flow-sdk/flow --output build/garden-apple-silicon
+          test -x build/garden-apple-silicon
       - name: Compare baseline with Apple Silicon-tuned native renderer
         run: |
           python3 macos/benchmark_native.py --flow flow-sdk/flow --frames 18 --repeats 2
