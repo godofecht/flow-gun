@@ -38,6 +38,11 @@ def main():
     sdk = flow.parent
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
+    # Flow generates portable WGSL + Metal stages from the same descriptor.
+    run([flow, "run", root / "src/garden_gpu.flow"])
+    shader = root / "dist/gpu/garden_scene/sh0_garden.metal"
+    if not shader.is_file():
+        raise RuntimeError("Flow GPU shader generation failed")
 
     with tempfile.TemporaryDirectory(prefix="garden-pgo-") as directory:
         scratch = Path(directory)
@@ -83,7 +88,8 @@ def main():
         # differ. Cocoa event handling and the Flow ABI are unmodified.
         run([
             "clang", *common, *profile_flags, generated,
-            sdk / "runtime/gfx_macos.m", archive,
+            sdk / "runtime/gfx_macos.m", root / "macos/garden_metal.m", archive,
+            "-framework", "Metal", "-framework", "Foundation",
             "-framework", "Cocoa", "-framework", "CoreGraphics",
             "-framework", "QuartzCore", "-framework", "CoreText",
             "-framework", "CoreAudio", "-framework", "AudioToolbox",
@@ -92,7 +98,9 @@ def main():
 
     print("Built Apple Silicon native Flow-gun:", output)
     if args.run:
-        run([output])
+        launch_env = os.environ.copy()
+        launch_env["FLOW_GARDEN_MSL"] = str(shader)
+        run([output], env=launch_env)
 
 
 if __name__ == "__main__":
