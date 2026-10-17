@@ -93,6 +93,10 @@ jobs:
         run: |
           npm install --no-save --ignore-scripts playwright-core@1.55.1
           node scripts/smoke-browser.mjs
+      - name: Verify real WebGPU raster execution using SwiftShader in Chromium
+        env:
+          GARDEN_TEST_WEBGPU: '1'
+        run: node scripts/smoke-browser.mjs
       - name: Publish verified compiled site to the active branch-based Pages source
         if: github.ref == 'refs/heads/main'
         run: |
