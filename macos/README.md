@@ -1,8 +1,10 @@
 # Apple Silicon phenotype acceleration experiment (macOS only)
 
-This is an **opt-in feasibility benchmark**, not an enabled rendering backend.
-The existing `src/garden.flow` deterministic ecology, software 3D renderer,
-recorder, Linux workflow and GitHub Pages WASM build are not modified.
+This directory now contains both an **opt-in real Metal 3D raster backend**
+and the earlier Core ML feasibility benchmark. The native builder uses the
+original Flow ecology and shares shader definitions with WebGPU; the regular
+portable `flow gfx` path, Linux and the headless recorder retain the
+Flow software renderer. The Core ML phenotype transform remains disabled.
 
 The experiment packs 4,096 plant-cell features into one Core ML tensor
 (`NCHW [1,5,64,64]`) and runs a fixed, explicit 1×1-convolution transform
@@ -73,6 +75,32 @@ study. The Core ML compute-unit option does not establish actual ANE placement.
 A future heavy learned morphology network could cross the break-even point,
 but it would require different measurements and actual integration.
 
+## GPU graphics: shared Flow shader source
+
+`src/garden_gpu.flow` defines the typed 3D vertex/fragment pipeline with
+Flow's `stdlib/gpu_render.flow`. The **same Flow invocation** emits
+`dist/gpu/garden_scene/sh0_garden.wgsl` and `.metal` through
+`gpu_job_write`. The native build automatically runs the generator.
+`macos/garden_metal.m` implements the GPU raster stage with an offscreen Metal
+render target and depth buffer. Its input is the *actual Flow simulator*
+(ground, species, age, resources, genes, terrain and camera matrix).
+Geometry and pixel colours are drawn on the GPU, then read back to the
+existing Flow framebuffer so HUD and controls are preserved.
+
+The browser Pages workflow runs the exact same Flow generator, and
+`site/garden-webgpu.mjs` uses the WGSL on a WebGPU canvas over the native
+Flow canvas' 3D viewport. WebGPU is selected automatically when available.
+The browser's 2D interface and software 3D fallback remain untouched.
+The browser uses Emscripten SIMD (`-msimd128`); Apple-only PGO does **not**
+transfer to WASM.
+
+The two GPU renderers generate simplified crossed-leaf vegetation for
+the same genomes and positions. They are not yet pixel-identical to Flow's
+software organ rendering, and native Metal introduces texture readback
+overhead. **Do not infer an interactive FPS win** from the earlier Clang
+PGO benchmark. Verify scene quality, end-to-end FPS and energy use on
+real target Macs and browsers before using GPU by default more widely.
+
 ## Native macOS application build: successful PGO experiment
 
 The actual bottleneck in Flow-gun is its **CPU 3D software rasterizer**, not
@@ -111,15 +139,12 @@ measurements. The CI runner has no validated user-visible Cocoa window test;
 only the build, headless rendering, exact pixel parity and timing are tested.
 The script intentionally keeps Linux, WebAssembly and Flow core untouched.
 
-## Runtime integration gate
+## Further performance and parity gates
 
-This is a safe first stage; it intentionally does not duplicate the Flow
-simulation or add an unverified macOS-only FFI to its main loop.
-Before enabling anything in `src/garden.flow`, the next stage must export
-or batch the *actual* genotype/environment data at a native Flow ABI boundary,
-reuse the returned phenotype buffer in the renderer, ensure deterministic
-fallback, and benchmark complete frames. The fallback should be the original
-CPU path whenever Core ML compilation, availability, numerical parity, or
-frame latency is worse. The 2D/3D and WASM views must still represent the
-same ecological state. Do not claim an ANE performance win from this
-prototype without the hardware evidence.
+The GPU paths now consume the actual Flow environmental state through one
+batched native/WASM ABI crossing. Their next gates are GPU-vs-CPU visual parity,
+steady-state FPS under representative camera movements, retained geometry
+buffers and avoidance of synchronous Metal readback. The fallback remains
+the original Flow renderer whenever the device or shader is unavailable.
+The Core ML arithmetic experiment remains deliberately unused because
+the measured end-to-end latency was much worse than direct CPU calculation.
