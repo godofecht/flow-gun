@@ -19,8 +19,10 @@ const server = createServer(async (req, res) => {
 await new Promise(done => server.listen(0, '127.0.0.1', done));
 const port = server.address().port;
 const gpuFlags = process.env.GARDEN_TEST_WEBGPU
-  ? ['--enable-unsafe-webgpu', '--enable-dawn-features=allow_unsafe_apis',
-     '--use-angle=swiftshader', '--enable-features=Vulkan'] : [];
+  ? ['--enable-unsafe-webgpu', '--enable-features=Vulkan',
+     '--use-angle=vulkan', '--use-vulkan=swiftshader',
+     '--use-webgpu-adapter=swiftshader', '--disable-vulkan-surface',
+     '--ignore-gpu-blocklist'] : [];
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage', ...gpuFlags] });
 let page;
 try {
