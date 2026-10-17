@@ -34,3 +34,12 @@ jobs:
         run: |
           swift run --package-path macos -c release garden-ane \
             --model=macos/GardenPhenotype.mlpackage --iterations=50
+      - name: Checkout Flow compiler for actual 3D rendering benchmark
+        uses: actions/checkout@v4
+        with:
+          repository: flooooooooooow/flow
+          path: flow-sdk
+          persist-credentials: false
+      - name: Compare baseline with Apple Silicon-tuned native renderer
+        run: |
+          python3 macos/benchmark_native.py --flow flow-sdk/flow --frames 18 --repeats 2
