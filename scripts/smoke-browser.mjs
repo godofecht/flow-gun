@@ -78,6 +78,19 @@ try {
       const adapter = await win.navigator.gpu.requestAdapter().catch(() => null);
       return !!adapter;
     });
+    const gpuDiagnostics = await page.evaluate(() => {
+      const iframe = document.querySelector('#garden-frame');
+      const w = iframe?.contentWindow;
+      return {
+        gpu: w?.flowGardenGPU ? {ready: w.flowGardenGPU.ready,
+          frames: w.flowGardenGPU.frames} : null,
+        modules: [...(w?.document?.querySelectorAll('script[type="module"]')||[])]
+          .map(x=>x.src),
+        overlay: w?.document?.querySelector('canvas[aria-hidden="true"]')
+          ? {hidden: w.document.querySelector('canvas[aria-hidden="true"]').hidden} : null,
+      };
+    });
+    console.log('GPU runner diagnostics: '+JSON.stringify(gpuDiagnostics));
     if (!canUseGPU) {
       console.log('SKIP: headless Chromium has no WebGPU adapter; software WASM fallback verified');
     } else {
