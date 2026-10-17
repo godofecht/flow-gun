@@ -88,7 +88,7 @@ Geometry and pixel colours are drawn on the GPU, then read back to the
 existing Flow framebuffer so HUD and controls are preserved.
 
 The browser Pages workflow runs the exact same Flow generator, and
-`site/garden-webgpu.mjs` uses the WGSL on a WebGPU canvas over the native
+`site/garden-webgpu.js` uses the WGSL on a WebGPU canvas over the native
 Flow canvas' 3D viewport. WebGPU is selected automatically when available.
 The browser's 2D interface and software 3D fallback remain untouched.
 The browser uses Emscripten SIMD (`-msimd128`); Apple-only PGO does **not**
