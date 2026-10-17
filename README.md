@@ -221,3 +221,12 @@ The GitHub workflow is a compile/record smoke test against current Flow main. Th
 Add competition for vertical canopy light, soil microbes and decomposers, nutrient-driven root branching, pollen agents and directional seed drift, seasons, or a state-to-state recognition/residual probe to detect emergent ecological regimes. The current model is intentionally small and inspectable.
 
 The core implementation is in [`src/garden.flow`](src/garden.flow).
+
+## Experimental Apple Silicon acceleration
+
+The optional [macOS Core ML benchmark](macos/README.md) tests batching the
+existing genotype-to-visual-phenotype calculations through Core ML with
+CPU and CPU/Neural Engine settings. It verifies output agreement and measures
+full batch latency on Apple Silicon; **it is not wired into the interactive
+Flow renderer and makes no speedup claim**. The regular deterministic Flow,
+Linux and WebAssembly paths remain unchanged.
