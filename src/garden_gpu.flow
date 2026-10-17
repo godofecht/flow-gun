@@ -44,8 +44,12 @@ function main() -> i32 {
     gpu_pipeline_uniforms(p, 4)
 
     let vs: ptr<GxFn> = gpu_pipeline_vs(p)
-    gx_out_position(vs, gx_mul(gx_umat(vs, 0),
-                    gx_vec4_of(gx_attr(vs, 0), gx_f(1.0))))
+    let clip: GxExpr = gx_let(vs, gx_mul(gx_umat(vs, 0),
+                                    gx_vec4_of(gx_attr(vs, 0), gx_f(1.0))))
+    # The existing Flow projection is OpenGL-style (-1..+1) in depth;
+    # Metal and WebGPU require 0..1 clip depth. Preserve x/y/w exactly.
+    gx_out_position(vs, gx_vec4(gx_x(clip), gx_y(clip),
+        gx_mul(gx_f(0.5), gx_add(gx_z(clip), gx_w(clip))), gx_w(clip)))
     gx_out(vs, 0, gx_attr(vs, 1))
     let fs: ptr<GxFn> = gpu_pipeline_fs(p)
     gx_out_color(fs, gx_vec4_of(gx_in(fs, 0), gx_f(1.0)))
