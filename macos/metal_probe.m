@@ -37,12 +37,15 @@ int main(void) {
         fputs("FAIL: GPU frame failed despite available Metal backend\n",stderr);
         free(rgb);return 2;
     }
-    int changed=0;
+    int geometry=0;
     for(int i=0;i<512*480;i++){
         const uint8_t *p=rgb+3*i;
-        if(p[0]<110 || p[0]>155 || p[1]<100 || p[1]>140) changed++;
+        // The Flow shader clears to RGB (0.28,0.45,0.58).
+        // Count only *rasterised* pixels, not the cleared background.
+        if(abs((int)p[0]-71)>4 || abs((int)p[1]-115)>4 ||
+           abs((int)p[2]-148)>4) geometry++;
     }
-    printf("PASS: Flow Metal real GPU frame (%d geometry pixels)\n",changed);
+    printf("Flow Metal: %d rasterised pixels beyond clear colour\n",geometry);
     free(rgb);
-    return changed>100?0:3;
+    return geometry>100?0:3;
 }
