@@ -53,6 +53,26 @@ diagnostic, not proof of user-device performance. Core ML's requested
 compute units are *allowed devices*, not guaranteed placement. Use Xcode
 Instruments/Core ML performance reporting to confirm ANE utilisation.
 
+## Observed Apple Silicon CI result (17 October 2026)
+
+The `macos-15` arm64 runner successfully built the model and passed all
+Swift unit tests and Core ML numerical comparisons. The diagnostic numbers
+from [the first successful job](https://github.com/godofecht/flow-gun/actions/runs/39039983977):
+
+| Backend | Milliseconds per 4,096-cell batch | Max absolute error vs Swift |
+|---|---:|---:|
+| Direct Swift CPU | 0.0111 | 0 |
+| Core ML CPU only | 1.0350 | 0.0000976 |
+| Core ML CPU + Neural Engine allowed | 1.0725 | 0.0000976 |
+
+**Do not enable this backend for the current phenotype transform.** It is
+approximately **97× slower** than the direct CPU reference when accounting
+for feature copies, Core ML scheduling and output readback. This is a
+single virtualised M1 runner observation rather than a comprehensive hardware
+study. The Core ML compute-unit option does not establish actual ANE placement.
+A future heavy learned morphology network could cross the break-even point,
+but it would require different measurements and actual integration.
+
 ## Runtime integration gate
 
 This is a safe first stage; it intentionally does not duplicate the Flow
