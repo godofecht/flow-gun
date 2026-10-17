@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: flow-garden-pages
+  group: flow-garden-pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
